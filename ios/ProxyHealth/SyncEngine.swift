@@ -33,6 +33,9 @@ actor SyncEngine {
 
     private static let pageSize = 2000
     private static let uploadChunk = 2000
+    /// Workouts examined per sync for the raw-detail backfill, so a first run stays bounded.
+    private static let workoutDetailLimit = 40
+    private static let recoveryTailSeconds: TimeInterval = 600
 
     // MARK: Authorization
 
@@ -57,13 +60,14 @@ actor SyncEngine {
         guard HKHealthStore.isHealthDataAvailable() else { throw SyncError.healthDataUnavailable }
 
         var report = SyncReport()
-        let sampleSince = Date().addingTimeInterval(-Double(settings.sampleBackfillDays) * 86_400)
+        await syncProfile(client: client, report: &report)
 
         for metric in HealthCatalog.quantities {
             do {
+                SyncState.applyBackfillPolicy(metric.backfill, for: metric.key)
                 let (added, deleted) = try await drain(
                     key: metric.key,
-                    predicate: .quantitySample(type: metric.type, predicate: Self.since(sampleSince)),
+                    predicate: .quantitySample(type: metric.type, predicate: Self.since(Self.start(metric.backfill, settings))),
                     client: client
                 ) { samples, deleted in
                     SyncRequest(
@@ -81,9 +85,10 @@ actor SyncEngine {
 
         for metric in HealthCatalog.categories {
             do {
+                SyncState.applyBackfillPolicy(metric.backfill, for: metric.key)
                 let (added, deleted) = try await drain(
                     key: metric.key,
-                    predicate: .categorySample(type: metric.type, predicate: Self.since(sampleSince)),
+                    predicate: .categorySample(type: metric.type, predicate: Self.since(Self.start(metric.backfill, settings))),
                     client: client
                 ) { samples, deleted in
                     SyncRequest(
@@ -129,9 +134,88 @@ actor SyncEngine {
             report.errors.append("daily: \(error.localizedDescription)")
         }
 
+        // Raw heart rate and speed for workouts older than the raw window, so past runs can be
+        // reviewed (drift, zones, splits) without carrying every heart-rate sample ever recorded.
+        do {
+            let detailed = try await syncWorkoutDetails(client: client, settings: settings, progress: progress)
+            if detailed > 0 { progress("workout detail: \(detailed) workouts") }
+        } catch {
+            report.errors.append("workout detail: \(error.localizedDescription)")
+        }
+
         report.finishedAt = Date()
         SyncState.lastSyncAt = report.finishedAt
         return report
+    }
+
+    /// For each workout in the backfill window that has not been covered yet, uploads the raw
+    /// heart-rate and speed samples inside it plus a recovery tail. Anchored queries only keep the
+    /// recent window for these high-volume types, so this fills in the parts that matter.
+    private func syncWorkoutDetails(
+        client: APIClient,
+        settings: SyncSettings,
+        progress: @escaping @Sendable (String) -> Void
+    ) async throws -> Int {
+        let since = Date().addingTimeInterval(-Double(settings.dailyBackfillDays) * 86_400)
+        let query = HKSampleQueryDescriptor(
+            predicates: [.workout(Self.since(since))],
+            sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
+            limit: Self.workoutDetailLimit
+        )
+        let workouts = try await query.result(for: store).filter { !SyncState.workoutDetailDone($0.uuid.uuidString) }
+        guard !workouts.isEmpty else { return 0 }
+
+        var done = 0
+        for workout in workouts {
+            let window = HKQuery.predicateForSamples(
+                withStart: workout.startDate,
+                end: workout.endDate.addingTimeInterval(Self.recoveryTailSeconds)
+            )
+            var payloads: [SamplePayload] = []
+            for metric in HealthCatalog.workoutDetailMetrics {
+                let samples = try await HKSampleQueryDescriptor(
+                    predicates: [.quantitySample(type: metric.type, predicate: window)],
+                    sortDescriptors: [],
+                    limit: Self.pageSize
+                ).result(for: store)
+                payloads += samples.map { Self.payload($0, metric: metric) }
+            }
+            guard !payloads.isEmpty else {
+                SyncState.markWorkoutDetailDone(workout.uuid.uuidString)
+                continue
+            }
+            for chunk in stride(from: 0, to: payloads.count, by: Self.uploadChunk) {
+                let slice = Array(payloads[chunk..<min(chunk + Self.uploadChunk, payloads.count)])
+                try await client.sync(SyncRequest(samples: slice))
+            }
+            SyncState.markWorkoutDetailDone(workout.uuid.uuidString)
+            done += 1
+            progress("workout \(Self.dayKey(workout.startDate)): \(payloads.count) raw samples")
+        }
+        return done
+    }
+
+    /// Uploads HealthKit characteristics (date of birth, biological sex) when they first become
+    /// available or change. They give the server the age and sex needed to read a VO2 max number.
+    private func syncProfile(client: APIClient, report: inout SyncReport) async {
+        var profile = ProfilePayload()
+        if let components = try? store.dateOfBirthComponents(),
+           let year = components.year, let month = components.month, let day = components.day {
+            profile.dateOfBirth = String(format: "%04d-%02d-%02d", year, month, day)
+        }
+        switch try? store.biologicalSex().biologicalSex {
+        case .female: profile.biologicalSex = "female"
+        case .male: profile.biologicalSex = "male"
+        case .other: profile.biologicalSex = "other"
+        default: break
+        }
+        guard profile != ProfilePayload(), profile != SyncState.lastProfile else { return }
+        do {
+            try await client.sync(SyncRequest(profile: profile))
+            SyncState.lastProfile = profile
+        } catch {
+            report.errors.append("profile: \(error.localizedDescription)")
+        }
     }
 
     /// Pages through an anchored query, uploading each page before saving the new anchor,
@@ -270,6 +354,15 @@ actor SyncEngine {
 
     private static func since(_ date: Date) -> NSPredicate {
         HKQuery.predicateForSamples(withStart: date, end: nil)
+    }
+
+    /// First sync reaches back this far; after that the anchor takes over.
+    private static func start(_ backfill: Backfill, _ settings: SyncSettings) -> Date {
+        switch backfill {
+        case .standard: Date().addingTimeInterval(-Double(settings.sampleBackfillDays) * 86_400)
+        case .extended: Date().addingTimeInterval(-Double(HealthCatalog.extendedBackfillDays) * 86_400)
+        case .all: .distantPast
+        }
     }
 
     private static let dayFormatter: DateFormatter = {

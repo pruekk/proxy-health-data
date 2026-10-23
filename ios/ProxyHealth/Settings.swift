@@ -17,21 +17,33 @@ struct SyncSettings: Sendable {
         static let serverURL = "serverURL"
         static let sampleBackfillDays = "sampleBackfillDays"
         static let dailyBackfillDays = "dailyBackfillDays"
+        static let dailyBackfillMigrated = "dailyBackfillMigrated.v2"
         static let token = "apiToken"
     }
 
     /// Production API on Cloud Run (Firebase project proxy-health-data).
     static let defaultServerURL = "https://proxy-health-api-569148641622.asia-southeast1.run.app"
 
+    static let defaultDailyBackfillDays = 730
+
     static func load() -> SyncSettings {
         let defaults = UserDefaults.standard
         // Earlier builds defaulted to the local dev server; move those installs to production.
         let stored = defaults.string(forKey: Keys.serverURL)
+        // Installs from before the window was widened kept the old 90-day default, which is too
+        // shallow for year-over-year trends. Bump those once; a value the user picked is left alone.
+        if !defaults.bool(forKey: Keys.dailyBackfillMigrated) {
+            defaults.set(true, forKey: Keys.dailyBackfillMigrated)
+            if (defaults.object(forKey: Keys.dailyBackfillDays) as? Int) == 90 {
+                defaults.set(defaultDailyBackfillDays, forKey: Keys.dailyBackfillDays)
+                SyncState.dailyBackfillDone = false
+            }
+        }
         return SyncSettings(
             serverURL: stored == nil || stored == "http://localhost:3000" ? defaultServerURL : stored!,
             token: Keychain.read(Keys.token) ?? "",
             sampleBackfillDays: defaults.object(forKey: Keys.sampleBackfillDays) as? Int ?? 7,
-            dailyBackfillDays: defaults.object(forKey: Keys.dailyBackfillDays) as? Int ?? 90
+            dailyBackfillDays: defaults.object(forKey: Keys.dailyBackfillDays) as? Int ?? defaultDailyBackfillDays
         )
     }
 
@@ -65,6 +77,7 @@ enum SyncState {
     private static let defaults = UserDefaults.standard
     private static let dailyBackfillDoneKey = "sync.dailyBackfillDone"
     private static let lastSyncKey = "sync.lastSyncAt"
+    private static let lastProfileKey = "sync.lastProfile"
 
     static func anchor(for key: String) -> HKQueryAnchor? {
         guard let data = defaults.data(forKey: "anchor.\(key)") else { return nil }
@@ -86,13 +99,44 @@ enum SyncState {
         set { defaults.set(newValue, forKey: lastSyncKey) }
     }
 
+    /// Last characteristics upload, so unchanged values are not re-sent on every sync.
+    static var lastProfile: ProfilePayload? {
+        get {
+            guard let data = defaults.data(forKey: lastProfileKey) else { return nil }
+            return try? JSONDecoder().decode(ProfilePayload.self, from: data)
+        }
+        set { defaults.set(newValue.flatMap { try? JSONEncoder().encode($0) }, forKey: lastProfileKey) }
+    }
+
+    /// Drops a metric's anchor when its backfill policy changed. Without this a widened window is
+    /// silently ignored: the anchor already points past the history we now want (VO2 max, for
+    /// instance, kept a 2024 anchor, so `.all` would have returned nothing).
+    static func applyBackfillPolicy(_ backfill: Backfill, for key: String) {
+        let current = String(describing: backfill)
+        guard defaults.string(forKey: "backfill.\(key)") != current else { return }
+        defaults.removeObject(forKey: "anchor.\(key)")
+        defaults.set(current, forKey: "backfill.\(key)")
+    }
+
+    /// Workouts whose raw heart-rate and speed samples have already been pulled, so the
+    /// per-workout backfill runs once per workout instead of on every sync.
+    static func workoutDetailDone(_ id: String) -> Bool {
+        defaults.bool(forKey: "workoutDetail.\(id)")
+    }
+
+    static func markWorkoutDetailDone(_ id: String) {
+        defaults.set(true, forKey: "workoutDetail.\(id)")
+    }
+
     /// Forget all anchors so the next sync re-uploads everything in the backfill window.
     static func reset() {
-        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("anchor.") {
+        for key in defaults.dictionaryRepresentation().keys
+        where key.hasPrefix("anchor.") || key.hasPrefix("backfill.") || key.hasPrefix("workoutDetail.") {
             defaults.removeObject(forKey: key)
         }
         dailyBackfillDone = false
         lastSyncAt = nil
+        lastProfile = nil
     }
 }
 

@@ -6,12 +6,25 @@ enum Aggregation: String, Sendable {
     case discrete
 }
 
+/// How far back the *first* sync of a metric reaches. Anchored queries keep everything current
+/// afterwards, so this only sizes the initial pull.
+enum Backfill: Sendable {
+    /// The window from Settings (7 days by default). For types that produce samples all day.
+    case standard
+    /// Two years. Affordable for types recorded a few times a week at most.
+    case extended
+    /// Everything HealthKit holds. Only for types that produce a handful of samples a month —
+    /// VO2 max stopped updating in Aug 2024, which `.extended` misses by 57 days.
+    case all
+}
+
 struct QuantityMetric: @unchecked Sendable {
     /// Short key used by the server and Firestore, e.g. "stepCount".
     let key: String
     let identifier: HKQuantityTypeIdentifier
     let unit: HKUnit
     let aggregation: Aggregation
+    var backfill: Backfill = .standard
 
     var type: HKQuantityType { HKQuantityType(identifier) }
 }
@@ -20,12 +33,16 @@ struct CategoryMetric: Sendable {
     let key: String
     let identifier: HKCategoryTypeIdentifier
     let label: @Sendable (Int) -> String?
+    var backfill: Backfill = .standard
 
     var type: HKCategoryType { HKCategoryType(identifier) }
 }
 
 /// Every HealthKit / Apple Fitness data type the app reads and syncs.
 enum HealthCatalog {
+    /// Days of history pulled for `.extended` metrics on the first sync.
+    static let extendedBackfillDays = 730
+
     private static let bpm = HKUnit.count().unitDivided(by: .minute())
     private static let metersPerSecond = HKUnit.meter().unitDivided(by: .second())
     private static let vo2 = HKUnit.literUnit(with: .milli)
@@ -46,21 +63,24 @@ enum HealthCatalog {
         .init(key: "timeInDaylight", identifier: .timeInDaylight, unit: .minute(), aggregation: .cumulative),
         // Heart and lungs
         .init(key: "heartRate", identifier: .heartRate, unit: bpm, aggregation: .discrete),
-        .init(key: "restingHeartRate", identifier: .restingHeartRate, unit: bpm, aggregation: .discrete),
-        .init(key: "walkingHeartRateAverage", identifier: .walkingHeartRateAverage, unit: bpm, aggregation: .discrete),
-        .init(key: "heartRateVariabilitySDNN", identifier: .heartRateVariabilitySDNN, unit: .secondUnit(with: .milli), aggregation: .discrete),
-        .init(key: "heartRateRecoveryOneMinute", identifier: .heartRateRecoveryOneMinute, unit: bpm, aggregation: .discrete),
+        .init(key: "restingHeartRate", identifier: .restingHeartRate, unit: bpm, aggregation: .discrete, backfill: .extended),
+        .init(key: "walkingHeartRateAverage", identifier: .walkingHeartRateAverage, unit: bpm, aggregation: .discrete, backfill: .extended),
+        .init(key: "heartRateVariabilitySDNN", identifier: .heartRateVariabilitySDNN, unit: .secondUnit(with: .milli), aggregation: .discrete, backfill: .extended),
+        .init(key: "heartRateRecoveryOneMinute", identifier: .heartRateRecoveryOneMinute, unit: bpm, aggregation: .discrete, backfill: .all),
         .init(key: "oxygenSaturation", identifier: .oxygenSaturation, unit: .percent(), aggregation: .discrete),
         .init(key: "respiratoryRate", identifier: .respiratoryRate, unit: bpm, aggregation: .discrete),
-        .init(key: "vo2Max", identifier: .vo2Max, unit: vo2, aggregation: .discrete),
-        .init(key: "bloodPressureSystolic", identifier: .bloodPressureSystolic, unit: .millimeterOfMercury(), aggregation: .discrete),
-        .init(key: "bloodPressureDiastolic", identifier: .bloodPressureDiastolic, unit: .millimeterOfMercury(), aggregation: .discrete),
+        .init(key: "vo2Max", identifier: .vo2Max, unit: vo2, aggregation: .discrete, backfill: .all),
+        .init(key: "bloodPressureSystolic", identifier: .bloodPressureSystolic, unit: .millimeterOfMercury(), aggregation: .discrete, backfill: .extended),
+        .init(key: "bloodPressureDiastolic", identifier: .bloodPressureDiastolic, unit: .millimeterOfMercury(), aggregation: .discrete, backfill: .extended),
         // Body
-        .init(key: "bodyMass", identifier: .bodyMass, unit: .gramUnit(with: .kilo), aggregation: .discrete),
-        .init(key: "bodyFatPercentage", identifier: .bodyFatPercentage, unit: .percent(), aggregation: .discrete),
-        .init(key: "leanBodyMass", identifier: .leanBodyMass, unit: .gramUnit(with: .kilo), aggregation: .discrete),
-        .init(key: "bodyMassIndex", identifier: .bodyMassIndex, unit: .count(), aggregation: .discrete),
-        .init(key: "appleSleepingWristTemperature", identifier: .appleSleepingWristTemperature, unit: .degreeCelsius(), aggregation: .discrete),
+        .init(key: "bodyMass", identifier: .bodyMass, unit: .gramUnit(with: .kilo), aggregation: .discrete, backfill: .all),
+        .init(key: "height", identifier: .height, unit: .meter(), aggregation: .discrete, backfill: .all),
+        .init(key: "bodyFatPercentage", identifier: .bodyFatPercentage, unit: .percent(), aggregation: .discrete, backfill: .all),
+        .init(key: "leanBodyMass", identifier: .leanBodyMass, unit: .gramUnit(with: .kilo), aggregation: .discrete, backfill: .all),
+        .init(key: "bodyMassIndex", identifier: .bodyMassIndex, unit: .count(), aggregation: .discrete, backfill: .all),
+        .init(key: "waistCircumference", identifier: .waistCircumference, unit: .meterUnit(with: .centi), aggregation: .discrete, backfill: .all),
+        .init(key: "bodyTemperature", identifier: .bodyTemperature, unit: .degreeCelsius(), aggregation: .discrete, backfill: .extended),
+        .init(key: "appleSleepingWristTemperature", identifier: .appleSleepingWristTemperature, unit: .degreeCelsius(), aggregation: .discrete, backfill: .extended),
         // Mobility and running form
         .init(key: "walkingSpeed", identifier: .walkingSpeed, unit: metersPerSecond, aggregation: .discrete),
         .init(key: "walkingStepLength", identifier: .walkingStepLength, unit: .meter(), aggregation: .discrete),
@@ -73,11 +93,18 @@ enum HealthCatalog {
 
     static let categories: [CategoryMetric] = [
         .init(key: "sleepAnalysis", identifier: .sleepAnalysis, label: { sleepLabel($0) }),
-        .init(key: "mindfulSession", identifier: .mindfulSession, label: { _ in nil }),
-        .init(key: "highHeartRateEvent", identifier: .highHeartRateEvent, label: { _ in nil }),
-        .init(key: "lowHeartRateEvent", identifier: .lowHeartRateEvent, label: { _ in nil }),
-        .init(key: "irregularHeartRhythmEvent", identifier: .irregularHeartRhythmEvent, label: { _ in nil }),
+        .init(key: "mindfulSession", identifier: .mindfulSession, label: { _ in nil }, backfill: .extended),
+        .init(key: "highHeartRateEvent", identifier: .highHeartRateEvent, label: { _ in nil }, backfill: .extended),
+        .init(key: "lowHeartRateEvent", identifier: .lowHeartRateEvent, label: { _ in nil }, backfill: .extended),
+        .init(key: "irregularHeartRhythmEvent", identifier: .irregularHeartRhythmEvent, label: { _ in nil }, backfill: .extended),
+        // Apple's "your cardio fitness is low" notification.
+        .init(key: "lowCardioFitnessEvent", identifier: .lowCardioFitnessEvent, label: { _ in nil }, backfill: .extended),
     ]
+
+    /// Metrics pulled per workout for after-the-fact review: heart rate and pace.
+    static var workoutDetailMetrics: [QuantityMetric] {
+        quantities.filter { ["heartRate", "runningSpeed", "cyclingSpeed"].contains($0.key) }
+    }
 
     static var readTypes: Set<HKObjectType> {
         var types = Set<HKObjectType>()
@@ -85,6 +112,9 @@ enum HealthCatalog {
         categories.forEach { types.insert($0.type) }
         types.insert(HKObjectType.workoutType())
         types.insert(HKObjectType.activitySummaryType())
+        // Needed to interpret VO2 max: Apple's cardio fitness levels are age- and sex-banded.
+        types.insert(HKCharacteristicType(.dateOfBirth))
+        types.insert(HKCharacteristicType(.biologicalSex))
         return types
     }
 
