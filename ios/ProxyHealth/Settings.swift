@@ -40,7 +40,23 @@ struct SyncSettings: Sendable {
         defaults.set(serverURL.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Keys.serverURL)
         defaults.set(sampleBackfillDays, forKey: Keys.sampleBackfillDays)
         defaults.set(dailyBackfillDays, forKey: Keys.dailyBackfillDays)
-        Keychain.write(Keys.token, token.trimmingCharacters(in: .whitespacesAndNewlines))
+        Keychain.write(Keys.token, Self.normalizeToken(token))
+    }
+
+    /// Accepts what people tend to paste: the bare token, "token:me" (the API_TOKENS / secret value),
+    /// "API_TOKENS=token:me", or "Bearer token", with stray whitespace or quotes.
+    static func normalizeToken(_ raw: String) -> String {
+        var token = raw.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'")))
+        if let range = token.range(of: "API_TOKENS=") { token = String(token[range.upperBound...]) }
+        if token.lowercased().hasPrefix("bearer ") { token = String(token.dropFirst(7)) }
+        token = String(token.split(separator: ",").first ?? "")
+        token = String(token.split(separator: ":").first ?? "")
+        return token.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Last characters of the token, so it can be checked against the server value without showing it.
+    var tokenHint: String {
+        token.isEmpty ? "Not set" : "••••\(token.suffix(4)) (\(token.count) chars)"
     }
 }
 

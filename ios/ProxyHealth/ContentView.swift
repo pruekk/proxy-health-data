@@ -19,7 +19,7 @@ struct ContentView: View {
 
                 Section("Server") {
                     LabeledContent("URL", value: model.settings.serverURL)
-                    LabeledContent("Token", value: model.settings.token.isEmpty ? "Not set" : "••••••")
+                    LabeledContent("Token", value: model.settings.tokenHint)
                     if let connection = model.connection {
                         Text(connection).font(.footnote).foregroundStyle(.secondary)
                     }

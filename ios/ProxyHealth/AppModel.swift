@@ -32,8 +32,8 @@ final class AppModel {
     }
 
     func saveSettings(_ new: SyncSettings) {
-        settings = new
         new.save()
+        settings = SyncSettings.load()
         connection = nil
     }
 
@@ -45,6 +45,8 @@ final class AppModel {
         do {
             let profile = try await client.me()
             connection = "Connected as \(profile.uid)"
+        } catch let error as APIError where error.status == 401 {
+            connection = "Token rejected (\(settings.tokenHint)). Use the part of API_TOKENS before \":me\"."
         } catch {
             connection = "Failed: \(error.localizedDescription)"
         }
