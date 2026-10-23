@@ -1,0 +1,229 @@
+import { FieldPath, FieldValue, Timestamp, type DocumentData, type WriteBatch } from 'firebase-admin/firestore'
+import { db } from './firebase'
+import type { ActivitySummaryInput, DailyStatInput, SampleInput, SyncBody, WorkoutInput } from './schemas'
+
+// Firestore layout
+//   users/{uid}                                  profile: timeZone, lastSyncAt
+//   users/{uid}/metrics/{type}                   one doc per HealthKit metric (kind, unit, lastSyncAt)
+//   users/{uid}/metrics/{type}/samples/{uuid}    raw HealthKit samples
+//   users/{uid}/workouts/{uuid}                  HKWorkout (Apple Fitness / Watch workouts)
+//   users/{uid}/daily/{yyyy-MM-dd}               per-day aggregates (metrics.*) + activity rings (activity)
+
+const BATCH_LIMIT = 450
+
+const userRef = (uid: string) => db.collection('users').doc(uid)
+const metricsCol = (uid: string) => userRef(uid).collection('metrics')
+const samplesCol = (uid: string, type: string) => metricsCol(uid).doc(type).collection('samples')
+const workoutsCol = (uid: string) => userRef(uid).collection('workouts')
+const dailyCol = (uid: string) => userRef(uid).collection('daily')
+
+type Op = (batch: WriteBatch) => void
+
+async function commit(ops: Op[]) {
+  for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
+    const batch = db.batch()
+    for (const op of ops.slice(i, i + BATCH_LIMIT)) op(batch)
+    await batch.commit()
+  }
+}
+
+export class BadRequest extends Error {}
+
+function toTimestamp(iso: string): Timestamp {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) throw new BadRequest(`invalid date: ${iso}`)
+  return Timestamp.fromDate(date)
+}
+
+// ---------- writes ----------
+
+function sampleDoc(s: SampleInput): DocumentData {
+  return {
+    kind: s.kind,
+    value: s.value,
+    unit: s.unit,
+    valueLabel: s.valueLabel,
+    startDate: toTimestamp(s.startDate),
+    endDate: toTimestamp(s.endDate),
+    sourceName: s.sourceName,
+    sourceBundleId: s.sourceBundleId,
+    device: s.device,
+    metadata: s.metadata,
+  }
+}
+
+function workoutDoc(w: WorkoutInput): DocumentData {
+  const { id, startDate, endDate, ...rest } = w
+  return { ...rest, startDate: toTimestamp(startDate), endDate: toTimestamp(endDate) }
+}
+
+function dailyDocs(stats: DailyStatInput[], rings: ActivitySummaryInput[]): Map<string, DocumentData> {
+  const days = new Map<string, DocumentData>()
+  const day = (date: string) => {
+    let doc = days.get(date)
+    if (!doc) days.set(date, (doc = { date, metrics: {} }))
+    return doc
+  }
+  for (const { date, type, ...values } of stats) day(date).metrics[type] = values
+  for (const { date, ...activity } of rings) day(date).activity = activity
+  return days
+}
+
+export async function ingest(uid: string, body: SyncBody) {
+  const now = FieldValue.serverTimestamp()
+  const ops: Op[] = []
+  const touchedMetrics = new Map<string, { kind: string; unit?: string }>()
+
+  for (const s of body.samples ?? []) {
+    const doc = sampleDoc(s)
+    ops.push((b) => b.set(samplesCol(uid, s.type).doc(s.id), doc))
+    touchedMetrics.set(s.type, { kind: s.kind, unit: s.unit })
+  }
+  for (const { type, ids } of body.deletedSamples ?? []) {
+    for (const id of ids) ops.push((b) => b.delete(samplesCol(uid, type).doc(id)))
+  }
+  for (const [type, info] of touchedMetrics) {
+    ops.push((b) => b.set(metricsCol(uid).doc(type), { type, ...info, lastSyncAt: now }, { merge: true }))
+  }
+
+  for (const w of body.workouts ?? []) {
+    const doc = workoutDoc(w)
+    ops.push((b) => b.set(workoutsCol(uid).doc(w.id), doc))
+  }
+  for (const id of body.deletedWorkoutIds ?? []) ops.push((b) => b.delete(workoutsCol(uid).doc(id)))
+
+  const days = dailyDocs(body.dailyStats ?? [], body.activitySummaries ?? [])
+  for (const [date, doc] of days) {
+    ops.push((b) => b.set(dailyCol(uid).doc(date), { ...doc, updatedAt: now }, { merge: true }))
+  }
+
+  ops.push((b) => b.set(userRef(uid), { timeZone: body.timeZone, lastSyncAt: now }, { merge: true }))
+  await commit(ops)
+
+  return {
+    samples: body.samples?.length ?? 0,
+    deletedSamples: (body.deletedSamples ?? []).reduce((n, d) => n + d.ids.length, 0),
+    workouts: body.workouts?.length ?? 0,
+    deletedWorkouts: body.deletedWorkoutIds?.length ?? 0,
+    days: days.size,
+  }
+}
+
+// ---------- reads ----------
+
+// Converts Firestore Timestamps to ISO strings so results are plain JSON.
+function plain(data: DocumentData): DocumentData {
+  const out: DocumentData = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (value instanceof Timestamp) out[key] = value.toDate().toISOString()
+    else if (value && typeof value === 'object' && !Array.isArray(value)) out[key] = plain(value)
+    else out[key] = value
+  }
+  return out
+}
+
+export interface Range {
+  from: Date
+  to: Date
+}
+
+export async function getProfile(uid: string): Promise<DocumentData> {
+  const snap = await userRef(uid).get()
+  return { uid, ...(snap.exists ? plain(snap.data()!) : {}) }
+}
+
+export async function listMetrics(uid: string) {
+  const snap = await metricsCol(uid).get()
+  return Promise.all(
+    snap.docs.map(async (doc) => {
+      const latest = await samplesCol(uid, doc.id).orderBy('startDate', 'desc').limit(1).get()
+      const sample = latest.docs[0]
+      return { ...plain(doc.data()), type: doc.id, latest: sample ? { id: sample.id, ...plain(sample.data()) } : null }
+    }),
+  )
+}
+
+export async function querySamples(uid: string, type: string, range: Range, limit: number) {
+  const snap = await samplesCol(uid, type)
+    .where('startDate', '>=', Timestamp.fromDate(range.from))
+    .where('startDate', '<', Timestamp.fromDate(range.to))
+    .orderBy('startDate', 'desc')
+    .limit(limit)
+    .get()
+  return snap.docs.map((d): DocumentData => ({ id: d.id, type, ...plain(d.data()) }))
+}
+
+export async function queryWorkouts(uid: string, range: Range, limit: number, activityType?: string) {
+  const snap = await workoutsCol(uid)
+    .where('startDate', '>=', Timestamp.fromDate(range.from))
+    .where('startDate', '<', Timestamp.fromDate(range.to))
+    .orderBy('startDate', 'desc')
+    .limit(activityType ? 1000 : limit)
+    .get()
+  const needle = activityType?.toLowerCase()
+  return snap.docs
+    .map((d): DocumentData => ({ id: d.id, ...plain(d.data()) }))
+    .filter((w) => !needle || String(w.activityTypeName).toLowerCase() === needle)
+    .slice(0, limit)
+}
+
+export async function queryDaily(uid: string, fromDate: string, toDate: string, metrics?: string[]) {
+  const snap = await dailyCol(uid)
+    .where(FieldPath.documentId(), '>=', fromDate)
+    .where(FieldPath.documentId(), '<=', toDate)
+    .orderBy(FieldPath.documentId(), 'asc')
+    .get()
+  return snap.docs.map((d) => {
+    const day = plain(d.data())
+    if (metrics?.length && day.metrics) {
+      day.metrics = Object.fromEntries(Object.entries(day.metrics).filter(([k]) => metrics.includes(k)))
+    }
+    return day
+  })
+}
+
+const ASLEEP = new Set(['asleepUnspecified', 'asleepCore', 'asleepDeep', 'asleepREM'])
+
+// Groups sleepAnalysis samples into nights (keyed by the local date the sleep ended).
+// When several sources recorded the same night (Watch, iPhone, third-party), the source
+// with the most asleep time is reported so stages are not double counted.
+export async function querySleep(uid: string, range: Range, timeZone: string) {
+  const samples = await querySamples(uid, 'sleepAnalysis', range, 5000)
+  const dayOf = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+
+  type Night = { start: string; end: string; stages: Record<string, number>; asleep: number }
+  const nights = new Map<string, Map<string, Night>>()
+
+  for (const s of samples) {
+    const night = dayOf.format(new Date(s.endDate))
+    const source = String(s.sourceName ?? 'unknown')
+    const label = String(s.valueLabel ?? s.value)
+    const minutes = (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 60000
+
+    let bySource = nights.get(night)
+    if (!bySource) nights.set(night, (bySource = new Map()))
+    let n = bySource.get(source)
+    if (!n) bySource.set(source, (n = { start: s.startDate, end: s.endDate, stages: {}, asleep: 0 }))
+
+    n.stages[label] = (n.stages[label] ?? 0) + minutes
+    if (ASLEEP.has(label)) n.asleep += minutes
+    if (s.startDate < n.start) n.start = s.startDate
+    if (s.endDate > n.end) n.end = s.endDate
+  }
+
+  const round = (m: number) => Math.round(m)
+  return [...nights.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, bySource]) => {
+      const [source, best] = [...bySource.entries()].sort(([, a], [, b]) => b.asleep - a.asleep)[0]!
+      return {
+        date,
+        source,
+        otherSources: [...bySource.keys()].filter((s) => s !== source),
+        bedtime: best.start,
+        wakeTime: best.end,
+        asleepMinutes: round(best.asleep),
+        stagesMinutes: Object.fromEntries(Object.entries(best.stages).map(([k, v]) => [k, round(v)])),
+      }
+    })
+}

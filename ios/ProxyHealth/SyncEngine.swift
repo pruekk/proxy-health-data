@@ -1,0 +1,358 @@
+import Foundation
+import HealthKit
+
+struct SyncReport: Sendable {
+    var samples = 0
+    var deletedSamples = 0
+    var workouts = 0
+    var days = 0
+    var errors: [String] = []
+    var finishedAt = Date()
+}
+
+enum SyncError: LocalizedError {
+    case notConfigured
+    case healthDataUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .notConfigured: "Set the server URL and API token in Settings first."
+        case .healthDataUnavailable: "Health data is not available on this device."
+        }
+    }
+}
+
+/// Reads HealthKit incrementally (anchored queries) and uploads changes to the server.
+/// Concurrent callers (UI button, background observers) share one in-flight sync.
+actor SyncEngine {
+    static let shared = SyncEngine()
+
+    let store = HKHealthStore()
+    private var current: Task<SyncReport, Error>?
+    private var observersStarted = false
+
+    private static let pageSize = 2000
+    private static let uploadChunk = 2000
+
+    // MARK: Authorization
+
+    func requestAuthorization() async throws {
+        guard HKHealthStore.isHealthDataAvailable() else { throw SyncError.healthDataUnavailable }
+        try await store.requestAuthorization(toShare: [], read: HealthCatalog.readTypes)
+    }
+
+    // MARK: Sync
+
+    func sync(progress: @escaping @Sendable (String) -> Void = { _ in }) async throws -> SyncReport {
+        if let current { return try await current.value }
+        let task = Task { try await self.performSync(progress: progress) }
+        current = task
+        defer { if current == task { current = nil } }
+        return try await task.value
+    }
+
+    private func performSync(progress: @escaping @Sendable (String) -> Void) async throws -> SyncReport {
+        let settings = SyncSettings.load()
+        guard let client = APIClient(settings: settings) else { throw SyncError.notConfigured }
+        guard HKHealthStore.isHealthDataAvailable() else { throw SyncError.healthDataUnavailable }
+
+        var report = SyncReport()
+        let sampleSince = Date().addingTimeInterval(-Double(settings.sampleBackfillDays) * 86_400)
+
+        for metric in HealthCatalog.quantities {
+            do {
+                let (added, deleted) = try await drain(
+                    key: metric.key,
+                    predicate: .quantitySample(type: metric.type, predicate: Self.since(sampleSince)),
+                    client: client
+                ) { samples, deleted in
+                    SyncRequest(
+                        samples: samples.map { Self.payload($0, metric: metric) },
+                        deletedSamples: deleted.isEmpty ? nil : [DeletedSamples(type: metric.key, ids: deleted)]
+                    )
+                }
+                report.samples += added
+                report.deletedSamples += deleted
+                if added + deleted > 0 { progress("\(metric.key): \(added) new, \(deleted) deleted") }
+            } catch {
+                report.errors.append("\(metric.key): \(error.localizedDescription)")
+            }
+        }
+
+        for metric in HealthCatalog.categories {
+            do {
+                let (added, deleted) = try await drain(
+                    key: metric.key,
+                    predicate: .categorySample(type: metric.type, predicate: Self.since(sampleSince)),
+                    client: client
+                ) { samples, deleted in
+                    SyncRequest(
+                        samples: samples.map { Self.payload($0, metric: metric) },
+                        deletedSamples: deleted.isEmpty ? nil : [DeletedSamples(type: metric.key, ids: deleted)]
+                    )
+                }
+                report.samples += added
+                report.deletedSamples += deleted
+                if added + deleted > 0 { progress("\(metric.key): \(added) new, \(deleted) deleted") }
+            } catch {
+                report.errors.append("\(metric.key): \(error.localizedDescription)")
+            }
+        }
+
+        do {
+            // Workouts are few and valuable, so they use the longer daily backfill window.
+            let workoutSince = Date().addingTimeInterval(-Double(settings.dailyBackfillDays) * 86_400)
+            let (added, _) = try await drain(
+                key: "workouts",
+                predicate: .workout(Self.since(workoutSince)),
+                client: client
+            ) { workouts, deleted in
+                SyncRequest(
+                    workouts: workouts.map(Self.payload),
+                    deletedWorkoutIds: deleted.isEmpty ? nil : deleted
+                )
+            }
+            report.workouts += added
+            if added > 0 { progress("workouts: \(added)") }
+        } catch {
+            report.errors.append("workouts: \(error.localizedDescription)")
+        }
+
+        // Daily aggregates and rings are recomputed for recent days every sync, since the Watch
+        // can deliver samples late. The first sync backfills the full window.
+        let days = SyncState.dailyBackfillDone ? 3 : settings.dailyBackfillDays
+        do {
+            report.days = try await syncDaily(days: days, client: client, report: &report)
+            progress("daily summaries: \(report.days) days")
+            if report.errors.isEmpty { SyncState.dailyBackfillDone = true }
+        } catch {
+            report.errors.append("daily: \(error.localizedDescription)")
+        }
+
+        report.finishedAt = Date()
+        SyncState.lastSyncAt = report.finishedAt
+        return report
+    }
+
+    /// Pages through an anchored query, uploading each page before saving the new anchor,
+    /// so an upload failure is retried on the next sync.
+    private func drain<S: HKSample>(
+        key: String,
+        predicate: HKSamplePredicate<S>,
+        client: APIClient,
+        makeRequest: ([S], [String]) -> SyncRequest
+    ) async throws -> (added: Int, deleted: Int) {
+        var anchor = SyncState.anchor(for: key)
+        var added = 0
+        var deleted = 0
+        while true {
+            let query = HKAnchoredObjectQueryDescriptor(predicates: [predicate], anchor: anchor, limit: Self.pageSize)
+            let result = try await query.result(for: store)
+            let deletedIds = result.deletedObjects.map(\.uuid.uuidString)
+            if !result.addedSamples.isEmpty || !deletedIds.isEmpty {
+                try await client.sync(makeRequest(result.addedSamples, deletedIds))
+            }
+            SyncState.setAnchor(result.newAnchor, for: key)
+            anchor = result.newAnchor
+            added += result.addedSamples.count
+            deleted += deletedIds.count
+            if result.addedSamples.count + result.deletedObjects.count < Self.pageSize { break }
+        }
+        return (added, deleted)
+    }
+
+    private func syncDaily(days: Int, client: APIClient, report: inout SyncReport) async throws -> Int {
+        let calendar = Calendar.current
+        let end = Date()
+        let start = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -(days - 1), to: end)!)
+
+        var stats: [DailyStatPayload] = []
+        for metric in HealthCatalog.quantities {
+            do {
+                stats += try await dailyStats(metric, from: start, to: end)
+            } catch {
+                // Missing permission or no data for a type is not fatal for the others.
+                if (error as? HKError)?.code != .errorNoData {
+                    report.errors.append("daily \(metric.key): \(error.localizedDescription)")
+                }
+            }
+        }
+        let rings = try await activitySummaries(from: start, to: end)
+
+        var dates = Set(rings.map(\.date))
+        guard !stats.isEmpty || !rings.isEmpty else { return 0 }
+        for chunk in stride(from: 0, to: max(stats.count, 1), by: Self.uploadChunk) {
+            let slice = Array(stats[chunk..<min(chunk + Self.uploadChunk, stats.count)])
+            slice.forEach { dates.insert($0.date) }
+            try await client.sync(SyncRequest(dailyStats: slice, activitySummaries: chunk == 0 ? rings : nil))
+        }
+        return dates.count
+    }
+
+    private func dailyStats(_ metric: QuantityMetric, from start: Date, to end: Date) async throws -> [DailyStatPayload] {
+        let options: HKStatisticsOptions = metric.aggregation == .cumulative
+            ? .cumulativeSum
+            : [.discreteAverage, .discreteMin, .discreteMax]
+        let query = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: metric.type, predicate: HKQuery.predicateForSamples(withStart: start, end: end)),
+            options: options,
+            anchorDate: start,
+            intervalComponents: DateComponents(day: 1)
+        )
+        let collection = try await query.result(for: store)
+        let unit = metric.unit
+        return collection.statistics().compactMap { s in
+            let payload = DailyStatPayload(
+                date: Self.dayKey(s.startDate),
+                type: metric.key,
+                unit: unit.unitString,
+                sum: s.sumQuantity()?.doubleValue(for: unit),
+                avg: s.averageQuantity()?.doubleValue(for: unit),
+                min: s.minimumQuantity()?.doubleValue(for: unit),
+                max: s.maximumQuantity()?.doubleValue(for: unit)
+            )
+            return payload.sum == nil && payload.avg == nil ? nil : payload
+        }
+    }
+
+    private func activitySummaries(from start: Date, to end: Date) async throws -> [ActivitySummaryPayload] {
+        let calendar = Calendar.current
+        var startComponents = calendar.dateComponents([.era, .year, .month, .day], from: start)
+        var endComponents = calendar.dateComponents([.era, .year, .month, .day], from: end)
+        startComponents.calendar = calendar
+        endComponents.calendar = calendar
+        let predicate = HKQuery.predicate(forActivitySummariesBetweenStart: startComponents, end: endComponents)
+        let summaries = try await HKActivitySummaryQueryDescriptor(predicate: predicate).result(for: store)
+
+        return summaries.compactMap { s in
+            guard let day = calendar.date(from: s.dateComponents(for: calendar)) else { return nil }
+            return ActivitySummaryPayload(
+                date: Self.dayKey(day),
+                moveMode: s.activityMoveMode == .appleMoveTime ? "moveTime" : "activeEnergy",
+                activeEnergyKcal: s.activeEnergyBurned.doubleValue(for: .kilocalorie()),
+                activeEnergyGoalKcal: s.activeEnergyBurnedGoal.doubleValue(for: .kilocalorie()),
+                moveMinutes: s.appleMoveTime.doubleValue(for: .minute()),
+                moveMinutesGoal: s.appleMoveTimeGoal.doubleValue(for: .minute()),
+                exerciseMinutes: s.appleExerciseTime.doubleValue(for: .minute()),
+                exerciseMinutesGoal: s.exerciseTimeGoal?.doubleValue(for: .minute()),
+                standHours: s.appleStandHours.doubleValue(for: .count()),
+                standHoursGoal: s.standHoursGoal?.doubleValue(for: .count())
+            )
+        }
+    }
+
+    // MARK: Background delivery
+
+    /// Registers observer queries so HealthKit wakes the app when new data arrives.
+    func startBackgroundDelivery() {
+        guard HKHealthStore.isHealthDataAvailable(), !observersStarted else { return }
+        observersStarted = true
+
+        let types: [(HKSampleType, HKUpdateFrequency)] =
+            HealthCatalog.quantities.map { ($0.type, .hourly) }
+            + HealthCatalog.categories.map { ($0.type, .hourly) }
+            + [(HKObjectType.workoutType(), .immediate)]
+
+        for (type, frequency) in types {
+            let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in
+                guard error == nil else { completion(); return }
+                Task {
+                    _ = try? await SyncEngine.shared.sync()
+                    completion()
+                }
+            }
+            store.execute(query)
+            store.enableBackgroundDelivery(for: type, frequency: frequency) { _, _ in }
+        }
+    }
+
+    // MARK: Mapping
+
+    private static func since(_ date: Date) -> NSPredicate {
+        HKQuery.predicateForSamples(withStart: date, end: nil)
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private static func dayKey(_ date: Date) -> String { dayFormatter.string(from: date) }
+
+    private static func device(_ sample: HKSample) -> String? {
+        sample.device?.model ?? sample.device?.name
+    }
+
+    private static func payload(_ s: HKQuantitySample, metric: QuantityMetric) -> SamplePayload {
+        SamplePayload(
+            id: s.uuid.uuidString,
+            type: metric.key,
+            kind: "quantity",
+            value: s.quantity.doubleValue(for: metric.unit),
+            unit: metric.unit.unitString,
+            startDate: s.startDate,
+            endDate: s.endDate,
+            sourceName: s.sourceRevision.source.name,
+            sourceBundleId: s.sourceRevision.source.bundleIdentifier,
+            device: device(s),
+            metadata: MetaValue.from(s.metadata)
+        )
+    }
+
+    private static func payload(_ s: HKCategorySample, metric: CategoryMetric) -> SamplePayload {
+        SamplePayload(
+            id: s.uuid.uuidString,
+            type: metric.key,
+            kind: "category",
+            value: Double(s.value),
+            valueLabel: metric.label(s.value),
+            startDate: s.startDate,
+            endDate: s.endDate,
+            sourceName: s.sourceRevision.source.name,
+            sourceBundleId: s.sourceRevision.source.bundleIdentifier,
+            device: device(s),
+            metadata: MetaValue.from(s.metadata)
+        )
+    }
+
+    private static func payload(_ w: HKWorkout) -> WorkoutPayload {
+        let bpm = HKUnit.count().unitDivided(by: .minute())
+        let heartRate = w.statistics(for: HKQuantityType(.heartRate))
+        let distanceTypes: [HKQuantityTypeIdentifier] = [
+            .distanceWalkingRunning, .distanceCycling, .distanceSwimming, .distanceDownhillSnowSports, .distanceWheelchair,
+        ]
+        let distance = distanceTypes.lazy
+            .compactMap { w.statistics(for: HKQuantityType($0))?.sumQuantity()?.doubleValue(for: .meter()) }
+            .first
+        let speed = [HKQuantityTypeIdentifier.runningSpeed, .cyclingSpeed].lazy
+            .compactMap { w.statistics(for: HKQuantityType($0))?.averageQuantity()?.doubleValue(for: .meter().unitDivided(by: .second())) }
+            .first
+
+        return WorkoutPayload(
+            id: w.uuid.uuidString,
+            activityType: w.workoutActivityType.rawValue,
+            activityTypeName: w.workoutActivityType.name,
+            startDate: w.startDate,
+            endDate: w.endDate,
+            durationSec: w.duration,
+            activeEnergyKcal: w.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()?.doubleValue(for: .kilocalorie()),
+            distanceM: distance,
+            avgHeartRate: heartRate?.averageQuantity()?.doubleValue(for: bpm),
+            minHeartRate: heartRate?.minimumQuantity()?.doubleValue(for: bpm),
+            maxHeartRate: heartRate?.maximumQuantity()?.doubleValue(for: bpm),
+            stepCount: w.statistics(for: HKQuantityType(.stepCount))?.sumQuantity()?.doubleValue(for: .count()),
+            avgRunningPowerW: w.statistics(for: HKQuantityType(.runningPower))?.averageQuantity()?.doubleValue(for: .watt()),
+            avgSpeedMps: speed,
+            elevationAscendedM: (w.metadata?[HKMetadataKeyElevationAscended] as? HKQuantity)?.doubleValue(for: .meter()),
+            isIndoor: w.metadata?[HKMetadataKeyIndoorWorkout] as? Bool,
+            sourceName: w.sourceRevision.source.name,
+            sourceBundleId: w.sourceRevision.source.bundleIdentifier,
+            device: device(w),
+            metadata: MetaValue.from(w.metadata)
+        )
+    }
+}

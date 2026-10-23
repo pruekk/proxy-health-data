@@ -1,0 +1,79 @@
+import Foundation
+import Observation
+
+@MainActor
+@Observable
+final class AppModel {
+    var settings = SyncSettings.load()
+    var isSyncing = false
+    var isAuthorized = UserDefaults.standard.bool(forKey: "healthAuthorizationRequested")
+    var lastReport: SyncReport?
+    var lastSyncAt = SyncState.lastSyncAt
+    var connection: String?
+    var errorMessage: String?
+    var log: [String] = []
+
+    func appendLog(_ line: String) {
+        let time = Date().formatted(date: .omitted, time: .standard)
+        log.insert("\(time)  \(line)", at: 0)
+        if log.count > 50 { log.removeLast(log.count - 50) }
+    }
+
+    func requestAuthorization() async {
+        do {
+            try await SyncEngine.shared.requestAuthorization()
+            isAuthorized = true
+            UserDefaults.standard.set(true, forKey: "healthAuthorizationRequested")
+            await SyncEngine.shared.startBackgroundDelivery()
+            appendLog("HealthKit access requested")
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func saveSettings(_ new: SyncSettings) {
+        settings = new
+        new.save()
+        connection = nil
+    }
+
+    func testConnection() async {
+        guard let client = APIClient(settings: settings) else {
+            connection = SyncError.notConfigured.localizedDescription
+            return
+        }
+        do {
+            let profile = try await client.me()
+            connection = "Connected as \(profile.uid)"
+        } catch {
+            connection = "Failed: \(error.localizedDescription)"
+        }
+    }
+
+    func syncNow() async {
+        guard !isSyncing else { return }
+        isSyncing = true
+        errorMessage = nil
+        appendLog("Sync started")
+        defer { isSyncing = false }
+        do {
+            let report = try await SyncEngine.shared.sync { line in
+                Task { @MainActor in self.appendLog(line) }
+            }
+            lastReport = report
+            lastSyncAt = report.finishedAt
+            appendLog("Sync finished: \(report.samples) samples, \(report.workouts) workouts, \(report.days) days")
+            report.errors.forEach { appendLog("⚠︎ \($0)") }
+        } catch {
+            errorMessage = error.localizedDescription
+            appendLog("Sync failed: \(error.localizedDescription)")
+        }
+    }
+
+    func resetSync() {
+        SyncState.reset()
+        lastSyncAt = nil
+        lastReport = nil
+        appendLog("Sync state reset; next sync re-uploads the backfill window")
+    }
+}
