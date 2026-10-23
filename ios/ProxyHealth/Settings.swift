@@ -20,10 +20,15 @@ struct SyncSettings: Sendable {
         static let token = "apiToken"
     }
 
+    /// Production API on Cloud Run (Firebase project proxy-health-data).
+    static let defaultServerURL = "https://proxy-health-api-569148641622.asia-southeast1.run.app"
+
     static func load() -> SyncSettings {
         let defaults = UserDefaults.standard
+        // Earlier builds defaulted to the local dev server; move those installs to production.
+        let stored = defaults.string(forKey: Keys.serverURL)
         return SyncSettings(
-            serverURL: defaults.string(forKey: Keys.serverURL) ?? "http://localhost:3000",
+            serverURL: stored == nil || stored == "http://localhost:3000" ? defaultServerURL : stored!,
             token: Keychain.read(Keys.token) ?? "",
             sampleBackfillDays: defaults.object(forKey: Keys.sampleBackfillDays) as? Int ?? 7,
             dailyBackfillDays: defaults.object(forKey: Keys.dailyBackfillDays) as? Int ?? 90

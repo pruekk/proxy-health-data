@@ -83,7 +83,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("https://your-server.run.app", text: $settings.serverURL)
+                    TextField(SyncSettings.defaultServerURL, text: $settings.serverURL)
                         .textContentType(.URL)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
