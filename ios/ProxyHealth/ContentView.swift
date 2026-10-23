@@ -63,6 +63,12 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Proxy Health")
+            // Shows "Connected as <uid>" without a tap, so a token pasted for the wrong user is
+            // obvious before any data is uploaded.
+            .task {
+                guard model.settings.isConfigured, model.connection == nil else { return }
+                await model.testConnection()
+            }
             .toolbar {
                 Button("Settings", systemImage: "gearshape") { showSettings = true }
             }

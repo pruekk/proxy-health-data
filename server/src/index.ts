@@ -3,6 +3,7 @@ import { auth } from './auth'
 import { parseDateKeys, parseRange } from './dates'
 import { env } from './env'
 import { handleMcp } from './mcp'
+import { oauth, revokeUserTokens } from './oauth'
 import { SyncBody } from './schemas'
 import { BadRequest, getProfile, ingest, listMetrics, queryDaily, querySamples, querySleep, queryWorkouts } from './store'
 
@@ -27,14 +28,33 @@ export const app = new Elysia()
     set.status = 500
     return { error: 'internal error' }
   })
-  .get('/', () => ({ name: 'proxy-health-data', endpoints: ['/health', '/v1/*', '/mcp'] }))
+  // Browser-based MCP clients do discovery with fetch(), so every response needs CORS.
+  .onAfterHandle({ as: 'global' }, ({ set }) => {
+    set.headers['access-control-allow-origin'] ??= '*'
+    set.headers['access-control-expose-headers'] ??= 'www-authenticate'
+  })
+  .options('/*', ({ set }) => {
+    set.status = 204
+    set.headers['access-control-allow-origin'] = '*'
+    set.headers['access-control-allow-methods'] = 'GET, POST, DELETE, OPTIONS'
+    set.headers['access-control-allow-headers'] = 'authorization, content-type, mcp-protocol-version'
+    set.headers['access-control-max-age'] = '86400'
+    return ''
+  })
+  .get('/', () => ({ name: 'proxy-health-data', endpoints: ['/health', '/v1/*', '/mcp', '/oauth/*'] }))
   .get('/health', () => ({ status: 'ok' }))
+
+  // ----- OAuth for Claude connectors (discovery, registration, sign-in, token) -----
+  .use(oauth)
 
   // ----- REST API used by the iOS app (and handy for debugging) -----
   .group('/v1', (v1) =>
     v1
       .use(auth)
       .get('/me', ({ uid }) => getProfile(uid))
+      // Signs this user's connectors out everywhere. The static API token still works, so the
+      // iOS app and Claude Code keep syncing.
+      .post('/revoke-connectors', async ({ uid }) => ({ ok: true, revoked: await revokeUserTokens(uid) }))
       .post('/sync', async ({ uid, body }) => ({ ok: true, written: await ingest(uid, body) }), {
         body: SyncBody,
       })

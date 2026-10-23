@@ -97,7 +97,7 @@ export async function ingest(uid: string, body: SyncBody) {
     ops.push((b) => b.set(dailyCol(uid).doc(date), { ...doc, updatedAt: now }, { merge: true }))
   }
 
-  ops.push((b) => b.set(userRef(uid), { timeZone: body.timeZone, lastSyncAt: now }, { merge: true }))
+  ops.push((b) => b.set(userRef(uid), { timeZone: body.timeZone, ...body.profile, lastSyncAt: now }, { merge: true }))
   await commit(ops)
 
   return {
@@ -132,25 +132,77 @@ export async function getProfile(uid: string): Promise<DocumentData> {
   return { uid, ...(snap.exists ? plain(snap.data()!) : {}) }
 }
 
-export async function listMetrics(uid: string) {
+export async function listMetrics(uid: string, types?: string[], withSources = false) {
   const snap = await metricsCol(uid).get()
+  const docs = types?.length ? snap.docs.filter((d) => types.includes(d.id)) : snap.docs
   return Promise.all(
-    snap.docs.map(async (doc) => {
+    docs.map(async (doc) => {
       const latest = await samplesCol(uid, doc.id).orderBy('startDate', 'desc').limit(1).get()
       const sample = latest.docs[0]
-      return { ...plain(doc.data()), type: doc.id, latest: sample ? { id: sample.id, ...plain(sample.data()) } : null }
+      const base = { ...plain(doc.data()), type: doc.id, latest: sample ? { id: sample.id, ...plain(sample.data()) } : null }
+      return withSources ? { ...base, sources: await metricSources(uid, doc.id) } : base
     }),
   )
 }
 
-export async function querySamples(uid: string, type: string, range: Range, limit: number) {
+// Which apps and devices report a metric, newest first. A metric with more than one source
+// (Watch and a scale app both logging weight, say) can look duplicated in the raw samples.
+export async function metricSources(uid: string, type: string, limit = 500) {
+  const snap = await samplesCol(uid, type).orderBy('startDate', 'desc').limit(limit).get()
+  const seen = new Map<string, { source: string; count: number; latest: string }>()
+  for (const doc of snap.docs) {
+    const source = String(doc.get('sourceName') ?? 'unknown')
+    const at = (doc.get('startDate') as Timestamp | undefined)?.toDate().toISOString() ?? ''
+    const entry = seen.get(source)
+    if (entry) entry.count += 1
+    else seen.set(source, { source, count: 1, latest: at })
+  }
+  return [...seen.values()].sort((a, b) => b.count - a.count)
+}
+
+export async function querySamples(uid: string, type: string, range: Range, limit: number, source?: string) {
   const snap = await samplesCol(uid, type)
     .where('startDate', '>=', Timestamp.fromDate(range.from))
     .where('startDate', '<', Timestamp.fromDate(range.to))
     .orderBy('startDate', 'desc')
-    .limit(limit)
+    // Filtering by source after the fact keeps this on the existing single-field index.
+    .limit(source ? Math.min(limit * 10, 5000) : limit)
     .get()
-  return snap.docs.map((d): DocumentData => ({ id: d.id, type, ...plain(d.data()) }))
+  const needle = source?.toLowerCase()
+  return snap.docs
+    .map((d): DocumentData => ({ id: d.id, type, ...plain(d.data()) }))
+    .filter((s) => !needle || String(s.sourceName ?? '').toLowerCase().includes(needle))
+    .slice(0, limit)
+}
+
+// HealthKit hands workout weather over as formatted quantity strings ("78.26 degF", "9000 %").
+// Read as-is a model would report 9000% humidity, so they are parsed into plain numbers here —
+// on the read path, so workouts synced before this existed are covered too.
+function weatherOf(metadata: unknown): DocumentData {
+  const meta = (metadata ?? {}) as Record<string, unknown>
+  const out: DocumentData = {}
+
+  const temp = String(meta.HKWeatherTemperature ?? '').match(/^(-?[\d.]+)\s*(degF|degC|K)/)
+  if (temp) {
+    const value = Number(temp[1])
+    const celsius = temp[2] === 'degF' ? (value - 32) / 1.8 : temp[2] === 'K' ? value - 273.15 : value
+    if (Number.isFinite(celsius)) out.weatherTempC = Number(celsius.toFixed(1))
+  }
+
+  // Relative humidity arrives in hundredths of a percent: "9000 %" is 90%.
+  const humidity = String(meta.HKWeatherHumidity ?? '').match(/^([\d.]+)\s*%/)
+  if (humidity) {
+    const percent = Number(humidity[1]) / 100
+    if (Number.isFinite(percent)) out.weatherHumidityPercent = Number(percent.toFixed(1))
+  }
+  return out
+}
+
+export async function getWorkout(uid: string, id: string): Promise<DocumentData | null> {
+  const doc = await workoutsCol(uid).doc(id).get()
+  if (!doc.exists) return null
+  const data = plain(doc.data()!)
+  return { id: doc.id, ...data, ...weatherOf(data.metadata) }
 }
 
 export async function queryWorkouts(uid: string, range: Range, limit: number, activityType?: string) {
@@ -162,7 +214,10 @@ export async function queryWorkouts(uid: string, range: Range, limit: number, ac
     .get()
   const needle = activityType?.toLowerCase()
   return snap.docs
-    .map((d): DocumentData => ({ id: d.id, ...plain(d.data()) }))
+    .map((d): DocumentData => {
+      const data = plain(d.data())
+      return { id: d.id, ...data, ...weatherOf(data.metadata) }
+    })
     .filter((w) => !needle || String(w.activityTypeName).toLowerCase() === needle)
     .slice(0, limit)
 }
@@ -180,6 +235,42 @@ export async function queryDaily(uid: string, fromDate: string, toDate: string, 
     }
     return day
   })
+}
+
+// Reshapes the daily aggregates into one series per metric. These values come from
+// HKStatisticsCollectionQuery on the phone, so iPhone/Watch double counting is already resolved.
+export async function dailySeries(uid: string, fromDate: string, toDate: string, types: string[]) {
+  const days = await queryDaily(uid, fromDate, toDate, types)
+  const series: Record<string, DocumentData[]> = {}
+  for (const day of days) {
+    const metrics = (day.metrics ?? {}) as Record<string, DocumentData>
+    for (const [type, values] of Object.entries(metrics)) {
+      if (!types.includes(type)) continue
+      ;(series[type] ??= []).push({ date: day.date, ...values })
+    }
+  }
+  return series
+}
+
+// Most recent daily aggregate per metric. Weight, body fat and other weekly-ish metrics fall
+// outside the raw-sample window, so they have no `latest` sample even though the trend is there.
+export async function latestDailyValues(uid: string, types?: string[], lookbackDays = 200) {
+  // Ascending then reversed: Firestore rejects a descending scan on document ids.
+  const from = new Date(Date.now() - lookbackDays * 86_400_000).toISOString().slice(0, 10)
+  const snap = await dailyCol(uid)
+    .where(FieldPath.documentId(), '>=', from)
+    .orderBy(FieldPath.documentId(), 'asc')
+    .get()
+  const latest: Record<string, DocumentData> = {}
+  for (const doc of [...snap.docs].reverse()) {
+    const metrics = (doc.get('metrics') ?? {}) as Record<string, DocumentData>
+    for (const [type, values] of Object.entries(metrics)) {
+      if (types?.length && !types.includes(type)) continue
+      if (latest[type]) continue // docs come newest first
+      latest[type] = { date: doc.id, ...values }
+    }
+  }
+  return latest
 }
 
 const ASLEEP = new Set(['asleepUnspecified', 'asleepCore', 'asleepDeep', 'asleepREM'])

@@ -72,8 +72,15 @@ export const ActivitySummaryInput = t.Object({
   standHoursGoal: t.Optional(t.Number()),
 })
 
+// HealthKit characteristics, uploaded when they first become readable or change.
+export const ProfileInput = t.Object({
+  dateOfBirth: t.Optional(DateKey),
+  biologicalSex: t.Optional(t.Union([t.Literal('female'), t.Literal('male'), t.Literal('other')])),
+})
+
 export const SyncBody = t.Object({
   timeZone: t.Optional(t.String({ maxLength: 64 })),
+  profile: t.Optional(ProfileInput),
   samples: t.Optional(t.Array(SampleInput, { maxItems: 5000 })),
   deletedSamples: t.Optional(
     t.Array(t.Object({ type: MetricKey, ids: t.Array(ObjectId, { maxItems: 5000 }) }), { maxItems: 200 }),
@@ -84,6 +91,7 @@ export const SyncBody = t.Object({
   activitySummaries: t.Optional(t.Array(ActivitySummaryInput, { maxItems: 1000 })),
 })
 
+export type ProfileInput = Static<typeof ProfileInput>
 export type SampleInput = Static<typeof SampleInput>
 export type WorkoutInput = Static<typeof WorkoutInput>
 export type DailyStatInput = Static<typeof DailyStatInput>

@@ -112,8 +112,15 @@ struct ActivitySummaryPayload: Codable, Sendable {
     var standHoursGoal: Double?
 }
 
+/// HealthKit characteristics. Read once (they rarely change) and stored on the user document.
+struct ProfilePayload: Codable, Sendable, Equatable {
+    var dateOfBirth: String?
+    var biologicalSex: String?
+}
+
 struct SyncRequest: Codable, Sendable {
     var timeZone: String = TimeZone.current.identifier
+    var profile: ProfilePayload?
     var samples: [SamplePayload]?
     var deletedSamples: [DeletedSamples]?
     var workouts: [WorkoutPayload]?
@@ -138,4 +145,6 @@ struct Profile: Codable, Sendable {
     var uid: String
     var timeZone: String?
     var lastSyncAt: String?
+    var dateOfBirth: String?
+    var biologicalSex: String?
 }
