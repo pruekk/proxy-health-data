@@ -32,6 +32,10 @@ const syncsCol = (uid: string) => userRef(uid).collection('syncs')
 
 /** Metrics whose raw samples only live for a few days unless recorded during a workout. */
 const SHORT_RETENTION = new Set(catalog.quantities.filter((q) => q.retention === 'short').map((q) => q.key))
+/** Metrics that never expire: a handful of samples a month, and history that cannot be rebuilt. */
+const KEEP_FOREVER = new Set(
+  [...catalog.quantities, ...catalog.categories].filter((m) => m.retention === 'keep').map((m) => m.key),
+)
 
 type Op = (batch: WriteBatch) => void
 
@@ -61,7 +65,7 @@ function toTimestamp(iso: string): Timestamp {
 // and daily aggregates carry the long view. Samples recorded during a workout are exempt, so a
 // run stays reviewable for as long as the workout itself.
 export function sampleExpiry(s: SampleInput, retentionYears: number): Timestamp | undefined {
-  if (retentionYears <= 0) return undefined
+  if (retentionYears <= 0 || KEEP_FOREVER.has(s.type)) return undefined
   const short = SHORT_RETENTION.has(s.type) && s.context !== 'workout'
   const days = short ? catalog.sync.shortRetentionDays : retentionYears * 365.25
   return Timestamp.fromMillis(new Date(s.startDate).getTime() + days * 86_400_000)
@@ -305,6 +309,8 @@ export async function applyRetention(uid: string, scope: string, dryRun: boolean
       const at = start ? start.toMillis() : new Date(`${doc.id}T00:00:00Z`).getTime()
       if (Number.isFinite(at)) stamp(doc.ref, at, true)
     }
+  } else if (KEEP_FOREVER.has(scope)) {
+    return { scope, scanned: 0, stamped: 0, retentionYears: years, dryRun, kept: true }
   } else {
     const short = SHORT_RETENTION.has(scope)
     let intervals: { from: number; to: number }[] = []

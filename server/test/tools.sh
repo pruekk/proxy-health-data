@@ -149,9 +149,14 @@ curl -s -X POST $B/v1/syncs -H "$AUTH" -H 'content-type: application/json' -d '{
 check "sync log stored" "120" "$(curl -s $B/v1/syncs -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["samples"])')"
 check "connectors listed" "0" "$(curl -s $B/v1/connectors -H "$AUTH" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)))')"
 
-echo "13. retention backfill"
-check "dry run stamps nothing" "true" "$(curl -s -X POST "$B/v1/retention/apply?scope=bodyMass" -H "$AUTH" | python3 -c 'import sys,json;print(str(json.load(sys.stdin)["dryRun"]).lower())')"
-check "already-stamped rows are skipped" "0" "$(curl -s -X POST "$B/v1/retention/apply?scope=bodyMass&dryRun=false" -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
+echo "13. irreplaceable metrics never expire"
+check "vo2Max is kept" "1" "$(curl -s -X POST "$B/v1/retention/apply?scope=vo2Max" -H "$AUTH" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin).get("kept") else 0)')"
+check "weight is kept" "1" "$(curl -s -X POST "$B/v1/retention/apply?scope=bodyMass" -H "$AUTH" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin).get("kept") else 0)')"
+check "heart rate is not kept" "0" "$(curl -s -X POST "$B/v1/retention/apply?scope=heartRate" -H "$AUTH" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin).get("kept") else 0)')"
+
+echo "13b. retention backfill"
+check "dry run stamps nothing" "true" "$(curl -s -X POST "$B/v1/retention/apply?scope=heartRate" -H "$AUTH" | python3 -c 'import sys,json;print(str(json.load(sys.stdin)["dryRun"]).lower())')"
+check "already-stamped rows are skipped" "0" "$(curl -s -X POST "$B/v1/retention/apply?scope=heartRate&dryRun=false" -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
 check "daily scope runs" "1" "$(curl -s -X POST "$B/v1/retention/apply?scope=daily&dryRun=false" -H "$AUTH" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(1 if d["scope"]=="daily" else 0)')"
 
 echo

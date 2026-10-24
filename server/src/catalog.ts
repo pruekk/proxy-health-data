@@ -14,8 +14,12 @@ type Backfill = 'standard' | 'extended' | 'all'
  * How long raw samples live. `short` is for types that produce hundreds of samples a day —
  * keeping a year of those is expensive and the hourly and daily aggregates cover the long view.
  * Samples recorded during a workout are exempt and follow the normal retention either way.
+ *
+ * `keep` never expires. It is for metrics recorded a handful of times a month whose history
+ * cannot be regenerated — VO2 max stopped updating in Aug 2024 and Apple will not backfill it,
+ * so a one- or two-year window would erase it for good. A few hundred documents over years.
  */
-type Retention = 'standard' | 'short'
+type Retention = 'standard' | 'short' | 'keep'
 
 interface QuantityMetric {
   key: string
@@ -32,6 +36,7 @@ interface CategoryMetric {
   key: string
   identifier: string
   backfill?: Backfill
+  retention?: Retention
 }
 
 const q = (
@@ -60,20 +65,20 @@ const quantities: QuantityMetric[] = [
   q('restingHeartRate', 'HKQuantityTypeIdentifierRestingHeartRate', 'count/min', 'discrete', { backfill: 'extended' }),
   q('walkingHeartRateAverage', 'HKQuantityTypeIdentifierWalkingHeartRateAverage', 'count/min', 'discrete', { backfill: 'extended' }),
   q('heartRateVariabilitySDNN', 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN', 'ms', 'discrete', { backfill: 'extended' }),
-  q('heartRateRecoveryOneMinute', 'HKQuantityTypeIdentifierHeartRateRecoveryOneMinute', 'count/min', 'discrete', { backfill: 'all' }),
+  q('heartRateRecoveryOneMinute', 'HKQuantityTypeIdentifierHeartRateRecoveryOneMinute', 'count/min', 'discrete', { retention: 'keep', backfill: 'all' }),
   q('oxygenSaturation', 'HKQuantityTypeIdentifierOxygenSaturation', '%', 'discrete'),
   q('respiratoryRate', 'HKQuantityTypeIdentifierRespiratoryRate', 'count/min', 'discrete'),
-  q('vo2Max', 'HKQuantityTypeIdentifierVO2Max', 'ml/(kg*min)', 'discrete', { backfill: 'all' }),
-  q('bloodPressureSystolic', 'HKQuantityTypeIdentifierBloodPressureSystolic', 'mmHg', 'discrete', { backfill: 'extended' }),
-  q('bloodPressureDiastolic', 'HKQuantityTypeIdentifierBloodPressureDiastolic', 'mmHg', 'discrete', { backfill: 'extended' }),
+  q('vo2Max', 'HKQuantityTypeIdentifierVO2Max', 'ml/(kg*min)', 'discrete', { retention: 'keep', backfill: 'all' }),
+  q('bloodPressureSystolic', 'HKQuantityTypeIdentifierBloodPressureSystolic', 'mmHg', 'discrete', { retention: 'keep', backfill: 'extended' }),
+  q('bloodPressureDiastolic', 'HKQuantityTypeIdentifierBloodPressureDiastolic', 'mmHg', 'discrete', { retention: 'keep', backfill: 'extended' }),
   // Body
-  q('bodyMass', 'HKQuantityTypeIdentifierBodyMass', 'kg', 'discrete', { backfill: 'all' }),
-  q('height', 'HKQuantityTypeIdentifierHeight', 'm', 'discrete', { backfill: 'all' }),
-  q('bodyFatPercentage', 'HKQuantityTypeIdentifierBodyFatPercentage', '%', 'discrete', { backfill: 'all' }),
-  q('leanBodyMass', 'HKQuantityTypeIdentifierLeanBodyMass', 'kg', 'discrete', { backfill: 'all' }),
-  q('bodyMassIndex', 'HKQuantityTypeIdentifierBodyMassIndex', 'count', 'discrete', { backfill: 'all' }),
-  q('waistCircumference', 'HKQuantityTypeIdentifierWaistCircumference', 'cm', 'discrete', { backfill: 'all' }),
-  q('bodyTemperature', 'HKQuantityTypeIdentifierBodyTemperature', 'degC', 'discrete', { backfill: 'all' }),
+  q('bodyMass', 'HKQuantityTypeIdentifierBodyMass', 'kg', 'discrete', { retention: 'keep', backfill: 'all' }),
+  q('height', 'HKQuantityTypeIdentifierHeight', 'm', 'discrete', { retention: 'keep', backfill: 'all' }),
+  q('bodyFatPercentage', 'HKQuantityTypeIdentifierBodyFatPercentage', '%', 'discrete', { retention: 'keep', backfill: 'all' }),
+  q('leanBodyMass', 'HKQuantityTypeIdentifierLeanBodyMass', 'kg', 'discrete', { retention: 'keep', backfill: 'all' }),
+  q('bodyMassIndex', 'HKQuantityTypeIdentifierBodyMassIndex', 'count', 'discrete', { retention: 'keep', backfill: 'all' }),
+  q('waistCircumference', 'HKQuantityTypeIdentifierWaistCircumference', 'cm', 'discrete', { retention: 'keep', backfill: 'all' }),
+  q('bodyTemperature', 'HKQuantityTypeIdentifierBodyTemperature', 'degC', 'discrete', { retention: 'keep', backfill: 'all' }),
   q('appleSleepingWristTemperature', 'HKQuantityTypeIdentifierAppleSleepingWristTemperature', 'degC', 'discrete', { backfill: 'extended' }),
   // Mobility and running form
   q('walkingSpeed', 'HKQuantityTypeIdentifierWalkingSpeed', 'm/s', 'discrete', { retention: 'short' }),
@@ -87,11 +92,11 @@ const quantities: QuantityMetric[] = [
 
 const categories: CategoryMetric[] = [
   { key: 'sleepAnalysis', identifier: 'HKCategoryTypeIdentifierSleepAnalysis' },
-  { key: 'mindfulSession', identifier: 'HKCategoryTypeIdentifierMindfulSession', backfill: 'extended' },
-  { key: 'highHeartRateEvent', identifier: 'HKCategoryTypeIdentifierHighHeartRateEvent', backfill: 'extended' },
-  { key: 'lowHeartRateEvent', identifier: 'HKCategoryTypeIdentifierLowHeartRateEvent', backfill: 'extended' },
-  { key: 'irregularHeartRhythmEvent', identifier: 'HKCategoryTypeIdentifierIrregularHeartRhythmEvent', backfill: 'extended' },
-  { key: 'lowCardioFitnessEvent', identifier: 'HKCategoryTypeIdentifierLowCardioFitnessEvent', backfill: 'extended' },
+  { key: 'mindfulSession', identifier: 'HKCategoryTypeIdentifierMindfulSession', backfill: 'extended', retention: 'keep' },
+  { key: 'highHeartRateEvent', identifier: 'HKCategoryTypeIdentifierHighHeartRateEvent', backfill: 'extended', retention: 'keep' },
+  { key: 'lowHeartRateEvent', identifier: 'HKCategoryTypeIdentifierLowHeartRateEvent', backfill: 'extended', retention: 'keep' },
+  { key: 'irregularHeartRhythmEvent', identifier: 'HKCategoryTypeIdentifierIrregularHeartRhythmEvent', backfill: 'extended', retention: 'keep' },
+  { key: 'lowCardioFitnessEvent', identifier: 'HKCategoryTypeIdentifierLowCardioFitnessEvent', backfill: 'extended', retention: 'keep' },
 ]
 
 const body = {

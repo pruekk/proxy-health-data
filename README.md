@@ -142,12 +142,18 @@ are not**, so never sum raw samples for a total.
 
 ### Retention
 
-One knob — `retentionYears`, default 2 and settable per user — with one exception. Metrics that
-produce hundreds of samples a day (`retention: 'short'` in the catalog: heart rate, walking and
-running speed, the running-form metrics) keep only `shortRetentionDays` of raw samples, **unless
-the sample was recorded during a workout**, which keeps a run reviewable for as long as the
-workout itself. Everything else — body measurements, VO₂ max, sleep, daily and hourly aggregates,
-workouts — follows the single value.
+One knob — `retentionYears`, default 2 and settable per user — and two exceptions, both set per
+metric in the catalog:
+
+- `retention: 'short'` — heart rate, walking and running speed, the running-form metrics. Hundreds
+  of samples a day, so only `shortRetentionDays` of raw is kept, **unless the sample was recorded
+  during a workout**, which keeps a run reviewable for as long as the workout itself.
+- `retention: 'keep'` — never expires. Body measurements, VO₂ max, heart-rate recovery, blood
+  pressure and the rare heart events. A handful of samples a month, and history that cannot be
+  rebuilt: VO₂ max stopped updating in Aug 2024 and Apple does not backfill, so even a two-year
+  window would erase it for good.
+
+Everything else — sleep, daily and hourly aggregates, workouts — follows the single value.
 
 Expiry is written per document at ingest and swept by Firestore TTL policies on `expiresAt`, so
 nothing runs on a schedule. Two consequences worth knowing: TTL deletes within about 24 hours of
