@@ -62,3 +62,41 @@ final class SpanDaysTests: XCTestCase {
         XCTAssertNil(Trends.spanDays(from: "nope", to: "2026-10-24"))
     }
 }
+
+final class SyncMergeTests: XCTestCase {
+    private struct Entry: Equatable {
+        let at: Date
+        let source: String
+    }
+
+    private func date(_ iso: String) -> Date { ISODate.parse(iso)! }
+
+    func testNewestFirst() {
+        let merged = SyncMerge.dedupedByTimestamp([
+            Entry(at: date("2026-10-24T08:00:00Z"), source: "a"),
+            Entry(at: date("2026-10-24T10:00:00Z"), source: "b"),
+        ]) { $0.at }
+        XCTAssertEqual(merged.map(\.source), ["b", "a"])
+    }
+
+    func testTheSameSyncFromBothSourcesAppearsOnce() {
+        // The device records a sync and the server returns its own copy of it.
+        let local = Entry(at: date("2026-10-24T10:00:00.120Z"), source: "local")
+        let server = Entry(at: date("2026-10-24T10:00:00.000Z"), source: "server")
+        let merged = SyncMerge.dedupedByTimestamp([local, server]) { $0.at }
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.source, "local", "the local entry is passed first and wins")
+    }
+
+    func testDistinctSyncsASecondApartAreKept() {
+        let merged = SyncMerge.dedupedByTimestamp([
+            Entry(at: date("2026-10-24T10:00:00Z"), source: "a"),
+            Entry(at: date("2026-10-24T10:00:01Z"), source: "b"),
+        ]) { $0.at }
+        XCTAssertEqual(merged.count, 2)
+    }
+
+    func testEmptyInput() {
+        XCTAssertTrue(SyncMerge.dedupedByTimestamp([Entry]()) { $0.at }.isEmpty)
+    }
+}

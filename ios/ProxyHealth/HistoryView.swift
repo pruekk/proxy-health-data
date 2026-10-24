@@ -58,6 +58,7 @@ struct HistoryView: View {
             Button {
                 Task {
                     await model.syncNow(trigger: .manual)
+                    dashboard.refreshLocalSyncs()
                     await dashboard.load(settings: model.settings, force: true)
                 }
             } label: {
@@ -76,18 +77,18 @@ struct HistoryView: View {
         }
     }
 
-    private var latest: SyncLogDoc? { dashboard.syncs.first }
+    private var latest: SyncLogDoc? { dashboard.lastSync }
 
     private var timeline: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "ไทม์ไลน์")
             Card {
-                if dashboard.syncs.isEmpty {
+                if dashboard.syncHistory.isEmpty {
                     Text("ยังไม่มีประวัติ — ซิงก์ครั้งแรกจะเริ่มบันทึก")
                         .font(.system(size: 13)).foregroundStyle(.secondary)
                 } else {
                     VStack(spacing: 0) {
-                        ForEach(dashboard.syncs.prefix(12)) { entry in
+                        ForEach(dashboard.syncHistory.prefix(12)) { entry in
                             HStack(alignment: .top, spacing: 11) {
                                 Circle()
                                     .fill(entry.failed ? Color.orange : Brand.blue)
@@ -108,7 +109,7 @@ struct HistoryView: View {
                                 Spacer(minLength: 0)
                             }
                             .padding(.vertical, 9)
-                            if entry.id != dashboard.syncs.prefix(12).last?.id { Divider() }
+                            if entry.id != dashboard.syncHistory.prefix(12).last?.id { Divider() }
                         }
                     }
                 }

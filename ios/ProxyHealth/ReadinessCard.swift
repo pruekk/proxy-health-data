@@ -5,6 +5,9 @@ import SwiftUI
 /// tools can never quote different numbers.
 struct ReadinessCard: View {
     let readiness: ReadinessDoc
+    /// `.redacted` greys out text but leaves shapes alone, so a placeholder would show a
+    /// convincing green dial. Colour is dropped explicitly instead.
+    var placeholder = false
 
     var body: some View {
         Card {
@@ -95,19 +98,21 @@ struct ReadinessCard: View {
     }
 
     private var bandColor: Color {
+        if placeholder { return Brand.track }
         switch readiness.band {
-        case "recover": .red
-        case "caution": .orange
-        case "ready": Brand.exercise
-        default: .green
+        case "recover": return .red
+        case "caution": return .orange
+        case "ready": return Brand.exercise
+        default: return .green
         }
     }
 
     private func color(for direction: String) -> Color {
+        if placeholder { return Brand.track }
         switch direction {
-        case "bad": .red
-        case "watch": .orange
-        default: Brand.exercise
+        case "bad": return .red
+        case "watch": return .orange
+        default: return Brand.exercise
         }
     }
 }

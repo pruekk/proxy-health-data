@@ -276,7 +276,7 @@ HealthKit wakes the app. Both are rate limited to one sync every two minutes; a 
 Unit tests cover the pure logic — URL building, trend maths, date parsing, relative wording:
 
 ```bash
-cd ios && swift test     # 28 tests
+cd ios && swift test     # 32 tests
 cd server && bun test    # 15 tests, the readiness formula
 ```
 

@@ -13,6 +13,9 @@ final class Dashboard {
     var connectors: [ConnectorDoc] = []
     var retentionYears = 1
     var readiness: ReadinessDoc?
+    /// Reports this device wrote, shown immediately so the history does not wait for the server
+    /// to acknowledge a sync that already finished.
+    var localSyncs: [SyncReport] = SyncState.recentSyncs
     var isLoading = false
     var error: String?
     var loadedAt: Date?
@@ -57,7 +60,9 @@ final class Dashboard {
         if let syncs = await syncs { self.syncs = syncs }
         if let connectors = await connectors { self.connectors = connectors }
         if let serverSettings = await serverSettings { self.retentionYears = serverSettings.retentionYears }
-        self.readiness = await readiness
+        // Keep the last good value when a single read fails, like every other field here —
+        // overwriting with nil made the readiness card vanish on a hiccup.
+        if let readiness = await readiness { self.readiness = readiness }
         self.error = failures.isEmpty ? nil : failures.joined(separator: " · ")
         self.loadedAt = Date()
     }
@@ -72,6 +77,31 @@ final class Dashboard {
             return nil
         }
     }
+
+    /// Picks up reports written by a sync that just finished.
+    func refreshLocalSyncs() {
+        localSyncs = SyncState.recentSyncs
+    }
+
+    /// The device's own reports merged with the server's, newest first and de-duplicated, so
+    /// both tabs tell the same story the moment a sync ends rather than a round trip later.
+    var syncHistory: [SyncLogDoc] {
+        let local = localSyncs.filter { !$0.skipped }.map {
+            SyncLogDoc(
+                startedAt: $0.startedAt,
+                durationMs: $0.durationMs,
+                trigger: $0.trigger.rawValue,
+                samples: $0.samples,
+                workouts: $0.workouts,
+                days: $0.days,
+                catalogVersion: nil,
+                errors: $0.errors.isEmpty ? nil : $0.errors
+            )
+        }
+        return SyncMerge.dedupedByTimestamp(local + syncs) { $0.startedAt }
+    }
+
+    var lastSync: SyncLogDoc? { syncHistory.first }
 
     // MARK: Derived
 

@@ -90,3 +90,15 @@ public enum RelativeThai {
         return formatter.string(from: date)
     }
 }
+
+/// Merging two histories of the same events — one written locally, one returned by the server.
+public enum SyncMerge {
+    /// Newest first, keeping the first occurrence of each whole-second timestamp. Local entries
+    /// should be passed first so a sync that just finished wins over the server's copy of it.
+    public static func dedupedByTimestamp<T>(_ items: [T], timestamp: (T) -> Date) -> [T] {
+        var seen = Set<Int>()
+        return items
+            .sorted { timestamp($0) > timestamp($1) }
+            .filter { seen.insert(Int(timestamp($0).timeIntervalSince1970.rounded())).inserted }
+    }
+}

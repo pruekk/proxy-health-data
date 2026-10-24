@@ -122,6 +122,23 @@ struct ReadinessDoc: Codable, Sendable {
     var missing: [String]
     var basis: String?
 
+    /// Shape for the loading state, shown redacted.
+    static let placeholder = ReadinessDoc(
+        score: 72,
+        band: "ready",
+        bandLabel: "พร้อม",
+        advice: "กำลังโหลด",
+        headline: "กำลังคำนวณความพร้อมจากข้อมูลล่าสุด",
+        factors: [
+            .init(key: "hrv", score: 60, value: 60, baseline: 60, deviation: "—", direction: "good"),
+            .init(key: "restingHeartRate", score: 60, value: 60, baseline: 60, deviation: "—", direction: "good"),
+            .init(key: "sleep", score: 60, value: 420, baseline: 480, deviation: "—", direction: "good"),
+            .init(key: "load", score: 60, value: 30, baseline: 30, deviation: "—", direction: "good"),
+        ],
+        missing: [],
+        basis: " "
+    )
+
     var missingNames: String {
         missing.map {
             switch $0 {

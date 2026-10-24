@@ -10,7 +10,13 @@ struct LatestView: View {
         ScrollView {
             VStack(spacing: 12) {
                 header
-                if let readiness = dashboard.readiness { ReadinessCard(readiness: readiness) }
+                if let readiness = dashboard.readiness {
+                    ReadinessCard(readiness: readiness)
+                } else if dashboard.isLoading || dashboard.loadedAt == nil {
+                    // A placeholder rather than nothing: the card appearing late looked like it
+                    // had been removed.
+                    ReadinessCard(readiness: .placeholder, placeholder: true).redacted(reason: .placeholder)
+                }
                 rings
                 todayTiles
                 heart
@@ -21,7 +27,11 @@ struct LatestView: View {
             .padding(.bottom, 110)
         }
         .background(Brand.ground)
-        .refreshable { await model.syncNow(trigger: .manual); await dashboard.load(settings: model.settings, force: true) }
+        .refreshable {
+            await model.syncNow(trigger: .manual)
+            dashboard.refreshLocalSyncs()
+            await dashboard.load(settings: model.settings, force: true)
+        }
         .task { await dashboard.load(settings: model.settings) }
     }
 
@@ -35,6 +45,7 @@ struct LatestView: View {
             Button {
                 Task {
                     await model.syncNow(trigger: .manual)
+                    dashboard.refreshLocalSyncs()
                     await dashboard.load(settings: model.settings, force: true)
                 }
             } label: {
@@ -59,7 +70,7 @@ struct LatestView: View {
     private var syncLine: String {
         // Falls back to the server's own history, so a fresh install still shows when the data
         // was last updated rather than claiming it never synced.
-        guard let at = model.lastSyncAt ?? dashboard.syncs.first?.startedAt else { return "ยังไม่เคยซิงก์" }
+        guard let at = model.lastSyncAt ?? dashboard.lastSync?.startedAt else { return "ยังไม่เคยซิงก์" }
         return "ซิงก์เมื่อ \(at.relativeThai)"
     }
 
