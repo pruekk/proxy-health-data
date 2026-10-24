@@ -142,8 +142,15 @@ export const app = new Elysia()
       // One scope per call (a metric type, or daily/hourly/workouts) to stay inside the timeout.
       .post(
         '/retention/apply',
-        ({ uid, query }) => applyRetention(uid, query.scope, query.dryRun !== 'false'),
-        { query: t.Object({ scope: t.String({ maxLength: 80 }), dryRun: t.Optional(t.String()) }) },
+        ({ uid, query }) => applyRetention(uid, query.scope, query.dryRun !== 'false', query.after),
+        {
+          query: t.Object({
+            scope: t.String({ maxLength: 80 }),
+            dryRun: t.Optional(t.String()),
+            // Resume point from a previous call that ran out of budget.
+            after: t.Optional(t.String({ maxLength: 200 })),
+          }),
+        },
       )
       // Deletes every health document for this user; profile, token and connectors stay.
       .delete('/data', async ({ uid }) => {

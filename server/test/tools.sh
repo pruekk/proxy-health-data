@@ -182,7 +182,33 @@ check "15.3 x 182/52 = 53.6" "53.6" "$(echo "$CF" | python3 -c 'import sys,json;
 check "accuracy is disclosed" "1" "$(echo "$CF" | grep -ci 'not comparable with an Apple')"
 check "still classified" "1" "$(echo "$CF" | python3 -c 'import sys,json;c=json.load(sys.stdin)["vo2Max"]["classification"];print(1 if c and c.get("level") else 0)')"
 
-echo "13b. retention backfill"
+echo "13b. retention backfill pages and resumes"
+# More documents than one page, to exercise the cursor rather than a single pass.
+python3 - "$B" "$TOKEN" <<'PY2'
+import json, sys, urllib.request
+from datetime import datetime, timedelta, timezone
+base, token = sys.argv[1], sys.argv[2]
+now = datetime.now(timezone.utc)
+batch = []
+for i in range(1200):
+    t = now - timedelta(minutes=i)
+    batch.append({"id": "page-%04d-0000-0000-000000000000" % i, "type": "walkingSpeed",
+                  "kind": "quantity", "value": 1.2, "unit": "m/s",
+                  "startDate": t.isoformat(), "endDate": t.isoformat()})
+for chunk in range(0, len(batch), 600):
+    req = urllib.request.Request(base + "/v1/sync",
+        data=json.dumps({"samples": batch[chunk:chunk + 600]}).encode(),
+        headers={"content-type": "application/json", "authorization": "Bearer " + token})
+    urllib.request.urlopen(req)
+print("  seeded 1200 walkingSpeed samples (page size is 1000)")
+PY2
+R=$(curl -s -X POST "$B/v1/retention/apply?scope=walkingSpeed" -H "$AUTH")
+check "scans past the first page" "1" "$(echo "$R" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["scanned"] > 1000 else 0)')"
+check "reports completion" "True" "$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["done"])')"
+check "no cursor when done" "1" "$(echo "$R" | python3 -c 'import sys,json;print(0 if json.load(sys.stdin).get("after") else 1)')"
+check "resumes from a cursor" "1" "$(curl -s -X POST "$B/v1/retention/apply?scope=walkingSpeed&after=page-0500-0000-0000-000000000000" -H "$AUTH" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(1 if 0 < d["scanned"] < 1200 else 0)')"
+
+echo "13c. retention backfill"
 check "dry run stamps nothing" "true" "$(curl -s -X POST "$B/v1/retention/apply?scope=heartRate" -H "$AUTH" | python3 -c 'import sys,json;print(str(json.load(sys.stdin)["dryRun"]).lower())')"
 check "already-stamped rows are skipped" "0" "$(curl -s -X POST "$B/v1/retention/apply?scope=heartRate&dryRun=false" -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
 check "daily scope runs" "1" "$(curl -s -X POST "$B/v1/retention/apply?scope=daily&dryRun=false" -H "$AUTH" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(1 if d["scope"]=="daily" else 0)')"

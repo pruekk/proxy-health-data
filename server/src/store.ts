@@ -21,6 +21,10 @@ import { catalog } from './catalog'
 const BATCH_LIMIT = 450
 /** Years of raw samples kept when the user has not chosen otherwise. */
 export const DEFAULT_RETENTION_YEARS = 2
+/** Documents read per page when stamping expiry, so memory does not track collection size. */
+const RETENTION_PAGE_SIZE = 1000
+/** Work budget per request; the caller resumes from the returned cursor. */
+const PAGE_BUDGET_MS = 90_000
 
 const userRef = (uid: string) => db.collection('users').doc(uid)
 const metricsCol = (uid: string) => userRef(uid).collection('metrics')
@@ -282,7 +286,8 @@ export async function queryHourly(uid: string, fromDate: string, toDate: string,
  * intervals are reconstructed here — otherwise the short window would delete exactly the
  * per-workout heart rate and pace that get_workout_detail depends on.
  */
-export async function applyRetention(uid: string, scope: string, dryRun: boolean) {
+export async function applyRetention(uid: string, scope: string, dryRun: boolean, after?: string) {
+  const started = Date.now()
   const years = await getRetentionYears(uid)
   const longMs = years * 365.25 * 86_400_000
   const shortMs = catalog.sync.shortRetentionDays * 86_400_000
@@ -295,40 +300,62 @@ export async function applyRetention(uid: string, scope: string, dryRun: boolean
     if (!dryRun) writer.set(ref, { expiresAt: Timestamp.fromMillis(at + (keepLong ? longMs : shortMs)) }, { merge: true })
   }
 
-  if (scope === 'daily' || scope === 'hourly' || scope === 'workouts') {
-    const col = scope === 'daily' ? dailyCol(uid) : scope === 'hourly' ? hourlyCol(uid) : workoutsCol(uid)
-    const snap = await col.get()
-    for (const doc of snap.docs) {
+  const isDated = scope === 'daily' || scope === 'hourly' || scope === 'workouts'
+  const collection = isDated
+    ? scope === 'daily'
+      ? dailyCol(uid)
+      : scope === 'hourly'
+        ? hourlyCol(uid)
+        : workoutsCol(uid)
+    : samplesCol(uid, scope)
+
+  // Workout windows are needed to tell which high-frequency samples survive the short window.
+  // Loaded once: there are tens of them, not tens of thousands.
+  const short = !isDated && SHORT_RETENTION.has(scope)
+  let intervals: { from: number; to: number }[] = []
+  if (short) {
+    const workouts = await workoutsCol(uid).get()
+    intervals = workouts.docs.map((d) => ({
+      from: (d.get('startDate') as Timestamp).toMillis(),
+      to: (d.get('endDate') as Timestamp).toMillis() + catalog.sync.recoveryTailSeconds * 1000,
+    }))
+  }
+
+  // Paged by document id — an ascending key scan, which Firestore does support — so memory stays
+  // flat regardless of collection size. A 32k-document collection used to load in one go and
+  // take the container down with it.
+  let cursor = after
+  let done = false
+  while (Date.now() - started < PAGE_BUDGET_MS) {
+    let query = collection.orderBy(FieldPath.documentId()).limit(RETENTION_PAGE_SIZE)
+    if (cursor) query = query.startAfter(cursor)
+    const page = await query.get()
+    if (page.empty) {
+      done = true
+      break
+    }
+
+    for (const doc of page.docs) {
       scanned += 1
       if (doc.get('expiresAt')) continue
       const start = doc.get('startDate') as Timestamp | undefined
-      const at = start ? start.toMillis() : new Date(`${doc.id}T00:00:00Z`).getTime()
-      if (Number.isFinite(at)) stamp(doc.ref, at, true)
-    }
-  } else {
-    const short = SHORT_RETENTION.has(scope)
-    let intervals: { from: number; to: number }[] = []
-    if (short) {
-      const workouts = await workoutsCol(uid).get()
-      intervals = workouts.docs.map((d) => ({
-        from: (d.get('startDate') as Timestamp).toMillis(),
-        to: (d.get('endDate') as Timestamp).toMillis() + catalog.sync.recoveryTailSeconds * 1000,
-      }))
-    }
-    const snap = await samplesCol(uid, scope).get()
-    for (const doc of snap.docs) {
-      scanned += 1
-      if (doc.get('expiresAt')) continue
-      const start = doc.get('startDate') as Timestamp | undefined
-      if (!start) continue
-      const at = start.toMillis()
+      const at = isDated && !start ? new Date(`${doc.id}T00:00:00Z`).getTime() : start?.toMillis()
+      if (at === undefined || !Number.isFinite(at)) continue
       const keepLong = !short || doc.get('context') === 'workout' || intervals.some((i) => at >= i.from && at <= i.to)
       stamp(doc.ref, at, keepLong)
+    }
+
+    if (!dryRun) await writer.flush()
+    cursor = page.docs[page.docs.length - 1]!.id
+    if (page.size < RETENTION_PAGE_SIZE) {
+      done = true
+      break
     }
   }
 
   if (!dryRun) await writer.close()
-  return { scope, scanned, stamped, retentionYears: years, dryRun }
+  // `done: false` means the budget ran out; call again with `after` to carry on.
+  return { scope, scanned, stamped, retentionYears: years, dryRun, done, after: done ? undefined : cursor }
 }
 
 // ---------- destructive ----------

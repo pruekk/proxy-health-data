@@ -158,8 +158,11 @@ Everything else — sleep, daily and hourly aggregates, workouts — follows the
 Expiry is written per document at ingest and swept by Firestore TTL policies on `expiresAt`, so
 nothing runs on a schedule. Two consequences worth knowing: TTL deletes within about 24 hours of
 expiry rather than at the moment, and a document keeps the expiry it was written with — changing
-the retention later only affects new writes. `server/scripts/apply-retention.ts` re-stamps what is
-already stored; run it after deploying and before switching the TTL policies on.
+the retention later only affects new writes. `POST /v1/retention/apply?scope=…` re-stamps what is already
+stored — run it after deploying and before switching the TTL policies on. It reads a page of
+documents at a time so memory does not track collection size, and returns `done: false` with an
+`after` cursor when it runs out of budget, to be called again. (`server/scripts/apply-retention.ts`
+does the same from a machine that has Application Default Credentials.)
 
 Hourly buckets are the ramp between the two: raw for a few days, hourly for the retention window,
 daily beyond. The phone computes them with the same `HKStatisticsCollectionQuery` as the daily
