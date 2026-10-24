@@ -96,7 +96,7 @@ struct LatestView: View {
     private var body_: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "ร่างกาย", hint: bodyMeasuredHint)
-            Card {
+            Card(vertical: 3) {
                 VStack(spacing: 0) {
                     row("bodyMass", "scalemass", "น้ำหนัก", unit: "kg", decimals: 1)
                     Divider()
@@ -164,7 +164,7 @@ struct LatestView: View {
     private var fitness: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "ความฟิต")
-            Card {
+            Card(vertical: 3) {
                 VStack(spacing: 0) {
                     let vo2 = dashboard.metric("vo2Max")
                     MetricRow(symbol: "chart.line.uptrend.xyaxis", title: "VO₂ max",

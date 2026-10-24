@@ -26,17 +26,24 @@ enum Brand {
     static let card = adaptive(light: (1, 1, 1), dark: (0.11, 0.11, 0.12))
     /// The track a ring is drawn on.
     static let track = adaptive(light: (0.94, 0.94, 0.95), dark: (0.17, 0.17, 0.19))
+    /// The neutral plate behind a row icon.
+    static let plate = adaptive(light: (0.953, 0.953, 0.965), dark: (0.17, 0.17, 0.19))
 
     static let gradient = LinearGradient(colors: [teal, indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 
 struct Card<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
+    /// Rows bring their own 13pt of vertical padding, so a card full of them insets by 3 to land
+    /// on the same 16 as everything else (mockup: `.row:first-child{padding-top:2px}`).
+    var vertical: CGFloat = 16
+    var horizontal: CGFloat = 16
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
-            .padding(16)
+            .padding(.vertical, vertical)
+            .padding(.horizontal, horizontal)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Brand.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             // Shadows do nothing against a near-black ground, so dark mode leans on the card
@@ -57,8 +64,8 @@ struct SectionTitle: View {
             if let hint { Text(hint).font(.system(size: 12)).foregroundStyle(.secondary) }
         }
         .padding(.horizontal, 2)
-        .padding(.top, 20)
-        .padding(.bottom, 2)
+        .padding(.top, 26)
+        .padding(.bottom, 10)
     }
 }
 
@@ -74,7 +81,7 @@ struct Ring: View {
     private var percent: Int { Trends.percent(value: value, goal: goal) }
 
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 0) {
             ZStack {
                 Circle().stroke(Brand.track, lineWidth: 11)
                 Circle()
@@ -84,8 +91,8 @@ struct Ring: View {
                 Text("\(percent)%").font(.system(size: 19, weight: .bold)).monospacedDigit()
             }
             .frame(width: 84, height: 84)
-            Text(name).font(.system(size: 12)).foregroundStyle(.secondary)
-            Text(detail).font(.system(size: 11)).foregroundStyle(.tertiary)
+            Text(name).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary).padding(.top, 7)
+            Text(detail).font(.system(size: 11)).foregroundStyle(.tertiary).padding(.top, 1)
         }
         .frame(maxWidth: .infinity)
     }
@@ -101,7 +108,7 @@ struct Tile: View {
     var tint: Color = Brand.blue
 
     var body: some View {
-        Card {
+        Card(vertical: 14, horizontal: 14) {
             HStack(spacing: 7) {
                 if let symbol {
                     Image(systemName: symbol).font(.system(size: 14, weight: .medium)).foregroundStyle(tint)
@@ -113,6 +120,7 @@ struct Tile: View {
                 if let unit { Text(unit).font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary) }
             }
             .padding(.top, 10)
+            .fixedSize(horizontal: false, vertical: true)
             if let meta { Text(meta).font(.system(size: 11.5)).foregroundStyle(.secondary).padding(.top, 6) }
         }
     }
@@ -144,17 +152,17 @@ struct MetricRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(tint)
                 .frame(width: 34, height: 34)
-                .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(Brand.plate, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.system(size: 14.5, weight: .semibold))
                 if let subtitle { Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary) }
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 3) {
-                Text(value).font(.system(size: 15, weight: .semibold)).monospacedDigit()
+                Text(value).font(.system(size: 14, weight: .semibold)).monospacedDigit()
                 if let detail {
                     Text(detail)
                         .font(.system(size: 11.5, weight: detailStyle == .plain ? .regular : .semibold))

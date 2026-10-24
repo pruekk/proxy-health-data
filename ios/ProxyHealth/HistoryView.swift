@@ -136,7 +136,7 @@ struct HistoryView: View {
     private var coverage: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "ความครอบคลุม", hint: "เก็บ \(dashboard.retentionYears) ปี")
-            Card {
+            Card(vertical: 3) {
                 VStack(spacing: 0) {
                     let interesting = ["heartRate", "bodyMass", "vo2Max", "sleepAnalysis"]
                     if interesting.allSatisfy({ dashboard.metric($0) == nil }) {
@@ -166,7 +166,7 @@ struct HistoryView: View {
     private var recentWorkouts: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "ออกกำลังกายล่าสุด")
-            Card {
+            Card(vertical: 3) {
                 VStack(spacing: 0) {
                     ForEach(dashboard.workouts.prefix(5)) { workout in
                         MetricRow(

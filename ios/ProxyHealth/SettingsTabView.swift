@@ -93,7 +93,7 @@ struct SettingsTabView: View {
     }
 
     private var automation: some View {
-        Card {
+        Card(vertical: 3) {
             VStack(spacing: 0) {
                 Toggle(isOn: Binding(
                     get: { model.backgroundDeliveryEnabled },
@@ -124,7 +124,7 @@ struct SettingsTabView: View {
     private var rarely: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "นาน ๆ ทำที")
-            Card {
+            Card(vertical: 3) {
                 VStack(spacing: 0) {
                     Button { confirmReset = true } label: {
                         MetricRow(symbol: "arrow.clockwise.circle", title: "ซิงก์ใหม่ทั้งหมด",
@@ -161,7 +161,7 @@ struct SettingsTabView: View {
     private var about: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "เกี่ยวกับ")
-            Card {
+            Card(vertical: 3) {
                 VStack(spacing: 0) {
                     MetricRow(symbol: "list.bullet.rectangle", title: "Catalog",
                               subtitle: "ดึงจากเซิร์ฟเวอร์ · \(CatalogStore.cached?.quantities.count ?? HealthCatalog.quantities.count) metric",
