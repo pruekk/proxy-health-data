@@ -34,14 +34,16 @@ actor SyncEngine {
     private static let pageSize = 2000
     private static let uploadChunk = 2000
     /// Workouts examined per sync for the raw-detail backfill, so a first run stays bounded.
-    private static let workoutDetailLimit = 40
-    private static let recoveryTailSeconds: TimeInterval = 600
+    private static var workoutDetailLimit: Int { CatalogStore.cached?.sync?.workoutDetailLimit ?? 40 }
+    private static var recoveryTailSeconds: TimeInterval { CatalogStore.cached?.sync?.recoveryTailSeconds ?? 600 }
 
     // MARK: Authorization
 
     func requestAuthorization() async throws {
         guard HKHealthStore.isHealthDataAvailable() else { throw SyncError.healthDataUnavailable }
-        try await store.requestAuthorization(toShare: [], read: HealthCatalog.readTypes)
+        let types = HealthCatalog.readTypes
+        try await store.requestAuthorization(toShare: [], read: types)
+        CatalogStore.authorizedTypes = Set(types.map(\.identifier))
     }
 
     // MARK: Sync
@@ -60,9 +62,13 @@ actor SyncEngine {
         guard HKHealthStore.isHealthDataAvailable() else { throw SyncError.healthDataUnavailable }
 
         var report = SyncReport()
+        await refreshCatalog(client: client, progress: progress)
         await syncProfile(client: client, report: &report)
 
-        for metric in HealthCatalog.quantities {
+        let catalog = HealthCatalog.effective
+        for skipped in catalog.skipped { report.errors.append("catalog: skipped \(skipped)") }
+
+        for metric in catalog.quantities {
             do {
                 SyncState.applyBackfillPolicy(metric.backfill, for: metric.key)
                 let (added, deleted) = try await drain(
@@ -83,7 +89,7 @@ actor SyncEngine {
             }
         }
 
-        for metric in HealthCatalog.categories {
+        for metric in catalog.categories {
             do {
                 SyncState.applyBackfillPolicy(metric.backfill, for: metric.key)
                 let (added, deleted) = try await drain(
@@ -195,6 +201,33 @@ actor SyncEngine {
         return done
     }
 
+    /// Downloads the metric catalog and asks for any read permission it added. Without this a
+    /// metric added server-side would sync nothing: HealthKit returns no data for a type that was
+    /// never authorised, rather than prompting.
+    private func refreshCatalog(client: APIClient, progress: @escaping @Sendable (String) -> Void) async {
+        // `try?` folds both outcomes that mean "keep what we have": a 304, and a failed request.
+        if let catalog = try? await client.catalog(knownVersion: CatalogStore.cached?.version) {
+            CatalogStore.save(catalog)
+            progress("catalog updated to \(catalog.version)")
+        }
+        await requestNewReadTypes()
+    }
+
+    /// Requests authorization for read types that have never been requested. iOS only shows the
+    /// sheet for undetermined types, so this is a no-op once everything has been decided.
+    func requestNewReadTypes() async {
+        let types = HealthCatalog.readTypes
+        let identifiers = Set(types.map(\.identifier))
+        let pending = identifiers.subtracting(CatalogStore.authorizedTypes)
+        guard !pending.isEmpty else { return }
+        do {
+            try await store.requestAuthorization(toShare: [], read: types)
+            CatalogStore.authorizedTypes = identifiers
+        } catch {
+            // Leave the record untouched so the next launch tries again.
+        }
+    }
+
     /// Uploads HealthKit characteristics (date of birth, biological sex) when they first become
     /// available or change. They give the server the age and sex needed to read a VO2 max number.
     private func syncProfile(client: APIClient, report: inout SyncReport) async {
@@ -251,7 +284,7 @@ actor SyncEngine {
         let start = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -(days - 1), to: end)!)
 
         var stats: [DailyStatPayload] = []
-        for metric in HealthCatalog.quantities {
+        for metric in HealthCatalog.effective.quantities {
             do {
                 stats += try await dailyStats(metric, from: start, to: end)
             } catch {
@@ -332,9 +365,10 @@ actor SyncEngine {
         guard HKHealthStore.isHealthDataAvailable(), !observersStarted else { return }
         observersStarted = true
 
+        let catalog = HealthCatalog.effective
         let types: [(HKSampleType, HKUpdateFrequency)] =
-            HealthCatalog.quantities.map { ($0.type, .hourly) }
-            + HealthCatalog.categories.map { ($0.type, .hourly) }
+            catalog.quantities.map { ($0.type, .hourly) }
+            + catalog.categories.map { ($0.type, .hourly) }
             + [(HKObjectType.workoutType(), .immediate)]
 
         for (type, frequency) in types {

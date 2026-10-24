@@ -64,7 +64,7 @@ MS=$(call get_metric_stats '{"types":["vo2Max","bodyMass"]}')
 check "vo2 days" "10" "$(echo "$MS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["metrics"]["vo2Max"]["days"])')"
 check "vo2 change +1.98" "1.98" "$(echo "$MS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["metrics"]["vo2Max"]["change"])')"
 check "weight change -1.35" "-1.35" "$(echo "$MS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["metrics"]["bodyMass"]["change"])')"
-check "unknown metric is null" "None" "$(call get_metric_stats '{"types":["nothingHere"]}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["metrics"]["nothingHere"])')"
+check "unknown metric reports no data" "0" "$(call get_metric_stats '{"types":["nothingHere"]}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["metrics"]["nothingHere"]["days"])')"
 check "missing types rejected" "1" "$(call get_metric_stats '{}' | grep -ci 'Error')"
 
 echo "5. get_body_composition"
@@ -89,6 +89,27 @@ check "source name kept" "Withings" "$(echo "$SRC" | python3 -c 'import sys,json
 check "omitted by default" "0" "$(call list_metrics '{}' | python3 -c 'import sys,json;m=json.load(sys.stdin)["metrics"];print(sum(1 for x in m if "sources" in x))')"
 check "source filter matches" "1" "$(call get_samples '{"type":"bodyMass","source":"withings"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["count"])')"
 check "source filter excludes" "0" "$(call get_samples '{"type":"bodyMass","source":"garmin"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["count"])')"
+
+echo "8. payload slimming"
+check "floats rounded" "1" "$(call get_daily_summaries '{"from":"2026-01-01","to":"2026-12-31"}' | grep -c '40.22' || true)"
+check "no null fields" "0" "$(call get_latest_values '{}' | grep -c ': null' || true)"
+FULL=$(call get_daily_summaries '{"from":"2026-01-01","to":"2026-12-31"}' | wc -c)
+NARROW=$(call get_daily_summaries '{"from":"2026-01-01","to":"2026-12-31","fields":["avg"]}' | wc -c)
+check "fields filter shrinks response" "1" "$([ "$NARROW" -lt "$FULL" ] && echo 1 || echo 0)"
+check "fields filter keeps avg only" "1" "$(call get_daily_summaries '{"from":"2026-01-01","to":"2026-12-31","fields":["avg"]}' | python3 -c 'import sys,json;d=json.load(sys.stdin)["days"];ks={k for day in d for m in day.get("metrics",{}).values() for k in m};print(1 if ks=={"avg"} else 0)')"
+
+echo "9. catalog is served"
+CAT=$(curl -s $B/v1/catalog -H "$AUTH")
+check "has a version" "1" "$(echo "$CAT" | python3 -c 'import sys,json;print(1 if len(json.load(sys.stdin)["version"])>=8 else 0)')"
+check "quantities present" "1" "$(echo "$CAT" | python3 -c 'import sys,json;print(1 if len(json.load(sys.stdin)["quantities"])>30 else 0)')"
+check "identifiers look right" "HKQuantityTypeIdentifierVO2Max" "$(echo "$CAT" | python3 -c 'import sys,json;print([q["identifier"] for q in json.load(sys.stdin)["quantities"] if q["key"]=="vo2Max"][0])')"
+VER=$(echo "$CAT" | python3 -c 'import sys,json;print(json.load(sys.stdin)["version"])')
+check "unchanged version -> 304" "304" "$(curl -s -o /dev/null -w '%{http_code}' "$B/v1/catalog?version=$VER" -H "$AUTH")"
+check "stale version -> 200" "200" "$(curl -s -o /dev/null -w '%{http_code}' "$B/v1/catalog?version=old" -H "$AUTH")"
+
+echo "10. denormalised metric reads"
+check "latest from metric doc" "76.65" "$(call get_latest_values '{"types":["bodyMass"]}' | python3 -c 'import sys,json;print([v["value"] for v in json.load(sys.stdin)["values"] if v["type"]=="bodyMass"][0])')"
+check "sources counted at ingest" "Withings" "$(call list_metrics '{"withSources":true}' | python3 -c 'import sys,json;m=[x for x in json.load(sys.stdin)["metrics"] if x["type"]=="bodyMass"][0];print(m["sources"][0]["source"])')"
 
 echo
 echo "passed: $pass  failed: $fail"

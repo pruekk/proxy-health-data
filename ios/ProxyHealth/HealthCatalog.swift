@@ -40,14 +40,16 @@ struct CategoryMetric: Sendable {
 
 /// Every HealthKit / Apple Fitness data type the app reads and syncs.
 enum HealthCatalog {
-    /// Days of history pulled for `.extended` metrics on the first sync.
-    static let extendedBackfillDays = 730
+    /// Days of history pulled for `.extended` metrics on the first sync. The server catalog can
+    /// override it without a rebuild.
+    static var extendedBackfillDays: Int { CatalogStore.cached?.sync?.extendedBackfillDays ?? 730 }
 
     private static let bpm = HKUnit.count().unitDivided(by: .minute())
     private static let metersPerSecond = HKUnit.meter().unitDivided(by: .second())
     private static let vo2 = HKUnit.literUnit(with: .milli)
         .unitDivided(by: HKUnit.gramUnit(with: .kilo).unitMultiplied(by: .minute()))
 
+    /// Built-in copy, used until the server catalog has been fetched at least once.
     static let quantities: [QuantityMetric] = [
         // Activity (Apple Fitness rings and movement)
         .init(key: "stepCount", identifier: .stepCount, unit: .count(), aggregation: .cumulative),
@@ -101,20 +103,67 @@ enum HealthCatalog {
         .init(key: "lowCardioFitnessEvent", identifier: .lowCardioFitnessEvent, label: { _ in nil }, backfill: .extended),
     ]
 
+    /// Unit strings the app accepts from the server catalog. `HKUnit(from:)` raises an
+    /// Objective-C exception on anything malformed — which Swift cannot catch — so resolution
+    /// goes through this list and an unknown unit skips the metric instead of crashing.
+    static func unit(named name: String) -> HKUnit? {
+        switch name {
+        case "count": .count()
+        case "count/min": bpm
+        case "m": .meter()
+        case "cm": .meterUnit(with: .centi)
+        case "km": .meterUnit(with: .kilo)
+        case "m/s": metersPerSecond
+        case "kg": .gramUnit(with: .kilo)
+        case "g": .gram()
+        case "kcal": .kilocalorie()
+        case "min": .minute()
+        case "s": .second()
+        case "ms": .secondUnit(with: .milli)
+        case "hr": .hour()
+        case "%": .percent()
+        case "degC": .degreeCelsius()
+        case "degF": .degreeFahrenheit()
+        case "W": .watt()
+        case "mmHg": .millimeterOfMercury()
+        case "ml/(kg*min)": vo2
+        case "L": .liter()
+        case "mL": .literUnit(with: .milli)
+        case "mg/dL": HKUnit.gramUnit(with: .milli).unitDivided(by: .literUnit(with: .deci))
+        case "dBASPL": .decibelAWeightedSoundPressureLevel()
+        default: nil
+        }
+    }
+
     /// Metrics pulled per workout for after-the-fact review: heart rate and pace.
     static var workoutDetailMetrics: [QuantityMetric] {
-        quantities.filter { ["heartRate", "runningSpeed", "cyclingSpeed"].contains($0.key) }
+        let keys = CatalogStore.cached?.workoutDetailMetrics ?? ["heartRate", "runningSpeed", "cyclingSpeed"]
+        return effective.quantities.filter { keys.contains($0.key) }
+    }
+
+    /// Metrics actually synced: the downloaded catalog when there is one, the built-in list
+    /// otherwise. Falling back keeps a first launch and an offline launch working.
+    static var effective: (quantities: [QuantityMetric], categories: [CategoryMetric], skipped: [String]) {
+        guard let remote = CatalogStore.cached else { return (quantities, categories, []) }
+        let resolved = remote.resolved()
+        guard !resolved.quantities.isEmpty else { return (quantities, categories, resolved.skipped) }
+        return resolved
     }
 
     static var readTypes: Set<HKObjectType> {
         var types = Set<HKObjectType>()
-        quantities.forEach { types.insert($0.type) }
-        categories.forEach { types.insert($0.type) }
+        let active = effective
+        active.quantities.forEach { types.insert($0.type) }
+        active.categories.forEach { types.insert($0.type) }
         types.insert(HKObjectType.workoutType())
         types.insert(HKObjectType.activitySummaryType())
         // Needed to interpret VO2 max: Apple's cardio fitness levels are age- and sex-banded.
-        types.insert(HKCharacteristicType(.dateOfBirth))
-        types.insert(HKCharacteristicType(.biologicalSex))
+        if let remote = CatalogStore.cached, !remote.characteristicTypes.isEmpty {
+            remote.characteristicTypes.forEach { types.insert($0) }
+        } else {
+            types.insert(HKCharacteristicType(.dateOfBirth))
+            types.insert(HKCharacteristicType(.biologicalSex))
+        }
         return types
     }
 
