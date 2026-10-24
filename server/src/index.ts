@@ -9,6 +9,7 @@ import { SyncBody, SyncLogInput } from './schemas'
 import {
   BadRequest,
   DEFAULT_RETENTION_YEARS,
+  applyRetention,
   deleteAllData,
   getProfile,
   getRetentionYears,
@@ -136,6 +137,13 @@ export const app = new Elysia()
           return { ok: true, retentionYears: body.retentionYears }
         },
         { body: t.Object({ retentionYears: t.Integer({ minimum: 1, maximum: 50 }) }) },
+      )
+      // One-off housekeeping: stamps `expiresAt` on documents written before retention existed.
+      // One scope per call (a metric type, or daily/hourly/workouts) to stay inside the timeout.
+      .post(
+        '/retention/apply',
+        ({ uid, query }) => applyRetention(uid, query.scope, query.dryRun !== 'false'),
+        { query: t.Object({ scope: t.String({ maxLength: 80 }), dryRun: t.Optional(t.String()) }) },
       )
       // Deletes every health document for this user; profile, token and connectors stay.
       .delete('/data', async ({ uid }) => {

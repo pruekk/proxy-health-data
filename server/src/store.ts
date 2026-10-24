@@ -271,6 +271,66 @@ export async function queryHourly(uid: string, fromDate: string, toDate: string,
   })
 }
 
+// ---------- retention backfill ----------
+
+/**
+ * Stamps `expiresAt` on documents written before retention existed, using the same rules as
+ * ingest. Runs one scope at a time (a metric type, or daily/hourly/workouts) so each call stays
+ * well inside the request timeout; the caller walks the scopes.
+ *
+ * Samples uploaded before the `context` field existed carry no workout marker, so workout
+ * intervals are reconstructed here — otherwise the short window would delete exactly the
+ * per-workout heart rate and pace that get_workout_detail depends on.
+ */
+export async function applyRetention(uid: string, scope: string, dryRun: boolean) {
+  const years = await getRetentionYears(uid)
+  const longMs = years * 365.25 * 86_400_000
+  const shortMs = catalog.sync.shortRetentionDays * 86_400_000
+  const writer = db.bulkWriter()
+  let scanned = 0
+  let stamped = 0
+
+  const stamp = (ref: FirebaseFirestore.DocumentReference, at: number, keepLong: boolean) => {
+    stamped += 1
+    if (!dryRun) writer.set(ref, { expiresAt: Timestamp.fromMillis(at + (keepLong ? longMs : shortMs)) }, { merge: true })
+  }
+
+  if (scope === 'daily' || scope === 'hourly' || scope === 'workouts') {
+    const col = scope === 'daily' ? dailyCol(uid) : scope === 'hourly' ? hourlyCol(uid) : workoutsCol(uid)
+    const snap = await col.get()
+    for (const doc of snap.docs) {
+      scanned += 1
+      if (doc.get('expiresAt')) continue
+      const start = doc.get('startDate') as Timestamp | undefined
+      const at = start ? start.toMillis() : new Date(`${doc.id}T00:00:00Z`).getTime()
+      if (Number.isFinite(at)) stamp(doc.ref, at, true)
+    }
+  } else {
+    const short = SHORT_RETENTION.has(scope)
+    let intervals: { from: number; to: number }[] = []
+    if (short) {
+      const workouts = await workoutsCol(uid).get()
+      intervals = workouts.docs.map((d) => ({
+        from: (d.get('startDate') as Timestamp).toMillis(),
+        to: (d.get('endDate') as Timestamp).toMillis() + catalog.sync.recoveryTailSeconds * 1000,
+      }))
+    }
+    const snap = await samplesCol(uid, scope).get()
+    for (const doc of snap.docs) {
+      scanned += 1
+      if (doc.get('expiresAt')) continue
+      const start = doc.get('startDate') as Timestamp | undefined
+      if (!start) continue
+      const at = start.toMillis()
+      const keepLong = !short || doc.get('context') === 'workout' || intervals.some((i) => at >= i.from && at <= i.to)
+      stamp(doc.ref, at, keepLong)
+    }
+  }
+
+  if (!dryRun) await writer.close()
+  return { scope, scanned, stamped, retentionYears: years, dryRun }
+}
+
 // ---------- destructive ----------
 
 /** Deletes every health document for a user, leaving the profile and OAuth state alone. */
