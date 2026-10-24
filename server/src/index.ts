@@ -1,6 +1,7 @@
 import { Elysia, t } from 'elysia'
 import { auth } from './auth'
 import { catalog } from './catalog'
+import { computeReadiness } from './readiness'
 import { parseDateKeys, parseRange } from './dates'
 import { env } from './env'
 import { handleMcp } from './mcp'
@@ -10,6 +11,7 @@ import {
   BadRequest,
   DEFAULT_RETENTION_YEARS,
   applyRetention,
+  collectReadinessInputs,
   deleteAllData,
   getProfile,
   getRetentionYears,
@@ -105,6 +107,8 @@ export const app = new Elysia()
         },
         { query: RangeQuery },
       )
+      // Training readiness: one number for "should I train hard today?".
+      .get('/readiness', async ({ uid }) => computeReadiness(await collectReadinessInputs(uid)))
       .get(
         '/hourly',
         async ({ uid, query }) => {

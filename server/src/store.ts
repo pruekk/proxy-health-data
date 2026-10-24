@@ -10,6 +10,7 @@ import type {
   WorkoutInput,
 } from './schemas'
 import { catalog } from './catalog'
+import type { ReadinessInputs } from './readiness'
 
 // Firestore layout
 //   users/{uid}                                  profile: timeZone, lastSyncAt
@@ -273,6 +274,51 @@ export async function queryHourly(uid: string, fromDate: string, toDate: string,
     }
     return day
   })
+}
+
+// ---------- training readiness ----------
+
+/**
+ * Gathers the inputs for a readiness score from the daily aggregates and last night's sleep.
+ * Baselines are the user's own mean over the window, so "normal" means normal for them.
+ */
+export async function collectReadinessInputs(uid: string, baselineDays = 90): Promise<ReadinessInputs> {
+  const timeZone = String((await getProfile(uid)).timeZone ?? 'UTC')
+  const today = new Date()
+  const key = (date: Date) => new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+  const from = key(new Date(today.getTime() - baselineDays * 86_400_000))
+  const series = await dailySeries(uid, from, key(today), [
+    'heartRateVariabilitySDNN',
+    'restingHeartRate',
+    'appleExerciseTime',
+  ])
+
+  const latestAndBaseline = (type: string) => {
+    const values = (series[type] ?? []).map((p) => p.avg ?? p.sum).filter((v): v is number => typeof v === 'number')
+    if (values.length < 2) return undefined
+    return { latest: values[values.length - 1]!, baseline: values.reduce((a, b) => a + b, 0) / values.length }
+  }
+
+  // Acute load is the last week of exercise minutes, chronic the whole window.
+  const exercise = (series.appleExerciseTime ?? []).map((p) => p.sum ?? 0)
+  const load = exercise.length >= 7
+    ? {
+        acute: exercise.slice(-7).reduce((a, b) => a + b, 0) / 7,
+        chronic: exercise.reduce((a, b) => a + b, 0) / exercise.length,
+      }
+    : undefined
+
+  // Last night only: readiness is about today.
+  const nights = await querySleep(uid, { from: new Date(today.getTime() - 2 * 86_400_000), to: today }, timeZone)
+  const lastNight = nights[nights.length - 1]
+  const sleepMinutes = typeof lastNight?.asleepMinutes === 'number' ? lastNight.asleepMinutes : undefined
+
+  return {
+    hrv: latestAndBaseline('heartRateVariabilitySDNN'),
+    restingHeartRate: latestAndBaseline('restingHeartRate'),
+    sleepMinutes,
+    load,
+  }
 }
 
 // ---------- retention backfill ----------

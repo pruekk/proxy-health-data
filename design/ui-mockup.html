@@ -132,6 +132,20 @@
   }
   .primary svg{width:17px;height:17px}
   .pull{text-align:center;font-size:11.5px;color:#b0b0b5;padding:2px 0 8px}
+  .readiness .rhead{display:flex;align-items:center;justify-content:space-between}
+  .readiness .info{width:19px;height:19px;border-radius:50%;background:#f0f0f3;color:#8a8a8e;
+    font:700 11px/19px ui-serif,Georgia,serif;text-align:center}
+  .readiness .rbody{display:flex;align-items:center;gap:15px;margin-top:10px}
+  .readiness .rdial{flex:none}
+  .readiness .rsay{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-2)}
+  .factors{margin-top:14px;border-top:1px solid var(--hair);padding-top:12px;display:grid;gap:9px}
+  .factors .f{display:grid;grid-template-columns:70px 1fr auto;align-items:center;gap:10px}
+  .factors .fn{font-size:12.5px;color:var(--ink-2);font-weight:500}
+  .factors .fb{height:6px;border-radius:4px;background:#f0f0f3;overflow:hidden}
+  .factors .fb b{display:block;height:100%;border-radius:4px}
+  .factors .fv{font-size:12.5px;font-weight:600;text-align:right;white-space:nowrap}
+  .factors .fv em{font-style:normal;font-weight:500;color:var(--muted);font-size:11px;margin-left:4px}
+  .rnote{margin:11px 0 0;font-size:11px;color:#b0b0b5;line-height:1.45}
   .hidden{display:none}
 </style>
 </head>
@@ -165,6 +179,38 @@
     </div>
 
     <div class="pull">↓ ดึงลงเพื่อซิงก์</div>
+    <div class="card readiness">
+      <div class="rhead">
+        <span class="label">ความพร้อมซ้อม</span>
+        <span class="info">i</span>
+      </div>
+      <div class="rbody">
+        <svg width="116" height="116" viewBox="0 0 116 116" class="rdial">
+          <circle cx="58" cy="58" r="46" stroke="#f0f0f3" stroke-width="13" fill="none"/>
+          <circle cx="58" cy="58" r="46" stroke="#e8a33d" stroke-width="13" fill="none" stroke-linecap="round"
+                  stroke-dasharray="121 289" transform="rotate(-90 58 58)"/>
+          <text x="58" y="56" text-anchor="middle" font-size="30" font-weight="700" fill="#1c1c1e">42</text>
+          <text x="58" y="74" text-anchor="middle" font-size="11" font-weight="600" fill="#8a8a8e">ระวัง</text>
+        </svg>
+        <p class="rsay">HRV ต่ำกว่าค่าฐาน 19% และชีพจรพักสูงขึ้น 7 bpm<br>วันนี้เหมาะกับซ้อมเบาหรือพัก</p>
+      </div>
+      <div class="factors">
+        <div class="f"><span class="fn">HRV</span>
+          <span class="fb"><b style="width:38%;background:#e8a33d"></b></span>
+          <span class="fv">50.9 <em>ฐาน 62.5</em></span></div>
+        <div class="f"><span class="fn">ชีพจรพัก</span>
+          <span class="fb"><b style="width:28%;background:#f2544b"></b></span>
+          <span class="fv">67 <em>ฐาน 60</em></span></div>
+        <div class="f"><span class="fn">การนอน</span>
+          <span class="fb"><b style="width:82%;background:#8ed24a"></b></span>
+          <span class="fv">6:34 <em>เป้า 8:00</em></span></div>
+        <div class="f"><span class="fn">โหลด 7 วัน</span>
+          <span class="fb"><b style="width:55%;background:#e8a33d"></b></span>
+          <span class="fv">สูง <em>58 / ฐาน 30 นาที</em></span></div>
+      </div>
+      <p class="rnote">เทียบกับค่าฐาน 90 วันของคุณเอง ไม่ใช่ค่ามาตรฐานประชากร</p>
+    </div>
+
     <div class="card">
       <div class="rings">
         <div class="ring">
@@ -208,7 +254,34 @@
       </div>
     </div>
 
-    <h3 class="sec">ร่างกาย <span class="hint">วัดล่าสุด 15 ต.ค. · 9 วันก่อน</span></h3>
+    <h3 class="sec">หัวใจและการหายใจ</h3>
+    <div class="grid2">
+      <div class="card tile"><div class="top">HRV</div><div class="val">42.8<small>ms</small></div><div class="meta">เฉลี่ย 30 วัน 58.1</div></div>
+      <div class="card tile"><div class="top">หายใจ</div><div class="val">13<small>/นาที</small></div><div class="meta">ปกติ</div></div>
+      <div class="card tile"><div class="top">ชีพจรตอนเดิน</div><div class="val">111<small>bpm</small></div><div class="meta">7 วันคงที่</div></div>
+      <div class="card tile"><div class="top">นอนหลับ</div><div class="val">6<small>ชม. 34</small></div><div class="meta">ลึก 59 · REM 71 นาที</div></div>
+    </div>
+
+    <h3 class="sec">ความฟิต</h3>
+    <div class="card">
+      <div class="row">
+        <div class="ic" style="background:#fdf3e2"><svg viewBox="0 0 24 24" fill="none"><path d="M5 17l4-6 3 3 3-6 4 9" stroke="#b26a00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>VO₂ max</b><span>Apple หยุดคำนวณตั้งแต่เติมส่วนสูงหาย</span></div>
+        <div class="end">32.9 <em><span class="trend stale">27 ส.ค. 2567</span></em></div>
+      </div>
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 14c3 0 3-5 6-5s3 7 6 7 4-4 4-4" stroke="#1f9d55" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div class="txt"><b>ฟื้นตัวหลังออกกำลัง</b><span>HR recovery 1 นาที</span></div>
+        <div class="end">15.5 <em>bpm</em></div>
+      </div>
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="5.5" r="2" stroke="#2d8abd" stroke-width="1.8"/><path d="M6 20l3-6 3.5 2.5L15 20M9 14l-1-4.5 4 1.5 2 2.5" stroke="#2d8abd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>วิ่งล่าสุด</b><span>วันนี้ 41 นาที · 146 bpm</span></div>
+        <div class="end">4.07 <em>km</em></div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+      <h3 class="sec">ร่างกาย <span class="hint">วัดล่าสุด 15 ต.ค. · 9 วันก่อน</span></h3>
     <div class="card">
       <div class="row">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M5 9h14l-1.2 10H6.2L5 9z" stroke="#2d8abd" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 9V6.5a3 3 0 016 0V9" stroke="#2d8abd" stroke-width="1.8"/></svg></div>
@@ -237,34 +310,7 @@
       </div>
     </div>
 
-    <h3 class="sec">หัวใจและการหายใจ</h3>
-    <div class="grid2">
-      <div class="card tile"><div class="top">HRV</div><div class="val">42.8<small>ms</small></div><div class="meta">เฉลี่ย 30 วัน 58.1</div></div>
-      <div class="card tile"><div class="top">หายใจ</div><div class="val">13<small>/นาที</small></div><div class="meta">ปกติ</div></div>
-      <div class="card tile"><div class="top">ชีพจรตอนเดิน</div><div class="val">111<small>bpm</small></div><div class="meta">7 วันคงที่</div></div>
-      <div class="card tile"><div class="top">นอนหลับ</div><div class="val">6<small>ชม. 34</small></div><div class="meta">ลึก 59 · REM 71 นาที</div></div>
-    </div>
-
-    <h3 class="sec">ความฟิต</h3>
-    <div class="card">
-      <div class="row">
-        <div class="ic" style="background:#fdf3e2"><svg viewBox="0 0 24 24" fill="none"><path d="M5 17l4-6 3 3 3-6 4 9" stroke="#b26a00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <div class="txt"><b>VO₂ max</b><span>Apple หยุดคำนวณตั้งแต่เติมส่วนสูงหาย</span></div>
-        <div class="end">32.9 <em><span class="trend stale">27 ส.ค. 2567</span></em></div>
-      </div>
-      <div class="row">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 14c3 0 3-5 6-5s3 7 6 7 4-4 4-4" stroke="#1f9d55" stroke-width="2" stroke-linecap="round"/></svg></div>
-        <div class="txt"><b>ฟื้นตัวหลังออกกำลัง</b><span>HR recovery 1 นาที</span></div>
-        <div class="end">15.5 <em>bpm</em></div>
-      </div>
-      <div class="row">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="5.5" r="2" stroke="#2d8abd" stroke-width="1.8"/><path d="M6 20l3-6 3.5 2.5L15 20M9 14l-1-4.5 4 1.5 2 2.5" stroke="#2d8abd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <div class="txt"><b>วิ่งล่าสุด</b><span>วันนี้ 41 นาที · 146 bpm</span></div>
-        <div class="end">4.07 <em>km</em></div>
-        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </div>
-    </div>
-  </div>
+</div>
 
   <!-- TAB: ประวัติ -->
   <div class="screen hidden" data-tab="history">

@@ -2,6 +2,7 @@
 // Spec: https://modelcontextprotocol.io/specification — supports initialize, ping, tools/list, tools/call.
 
 import { parseDateKeys, parseRange } from './dates'
+import { computeReadiness } from './readiness'
 import {
   BadRequest,
   dailySeries,
@@ -9,6 +10,7 @@ import {
   getWorkout,
   latestDailyValues,
   listMetrics,
+  collectReadinessInputs,
   queryDaily,
   queryHourly,
   querySamples,
@@ -433,6 +435,14 @@ const tools: Tool[] = [
         note: 'count is the number of samples found; series may be thinned to maxPoints.',
       }
     },
+  },
+  {
+    name: 'get_training_readiness',
+    title: 'Training readiness',
+    description:
+      'A 0-100 score for whether the user is recovered enough to train hard today, with the factors behind it: heart rate variability and resting heart rate against their own 90-day baselines, last night\'s sleep, and the ratio of the last week\'s training load to the long-run average. Returns the band (พักฟื้น / ระวัง / พร้อม / พร้อมมาก), a deterministic one-line summary, and which factors were unavailable. Baselines are personal, not population norms, and the score is null when fewer than two factors have data.',
+    inputSchema: { type: 'object', properties: {} },
+    run: async (uid) => computeReadiness(await collectReadinessInputs(uid)),
   },
   {
     name: 'get_cardio_fitness',

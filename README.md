@@ -134,6 +134,7 @@ Credentials (`GOOGLE_APPLICATION_CREDENTIALS`, gcloud ADC, or the Cloud Run serv
 | `get_cardio_fitness` | VO₂ max trend and level, with resting HR, HRV and HR recovery alongside |
 | `get_workout_detail` | one workout plus its raw HR and speed series, including a recovery tail after it ends |
 | `get_hourly_pattern` | per-hour values across a date range — the shape of the day, over months |
+| `get_training_readiness` | 0–100 score for "can I train hard today", with the factors behind it |
 
 `list_metrics` takes `withSources` to show which apps and devices report each metric, and
 `get_samples` takes a `source` filter. Several sources per metric is normal (Apple Watch, iPhone and
@@ -168,6 +169,22 @@ Hourly buckets are the ramp between the two: raw for a few days, hourly for the 
 daily beyond. The phone computes them with the same `HKStatisticsCollectionQuery` as the daily
 stats — so iPhone/Watch/third-party overlap is already resolved — and the server stores one
 document per day holding all 24 slots, which is 365 documents a year rather than tens of thousands.
+
+### Training readiness
+
+`server/src/readiness.ts` scores recovery out of 100 from four factors, each against the user's
+own 90-day baseline rather than population norms: HRV (weight 0.30), resting heart rate (0.25),
+last night's sleep (0.30) and the ratio of the last week's training load to the long-run average
+(0.15). Missing factors are named and the remaining weights renormalised; below two factors the
+score is `null` rather than a guess.
+
+The band and its sentence are a lookup, not a model: 0–34 พักฟื้น, 35–54 ระวัง, 55–79 พร้อม,
+80–100 พร้อมมาก, each with fixed advice, prefixed by the one or two factors furthest from
+baseline. Same inputs, same words — so the app and `get_training_readiness` can never disagree.
+There is no industry standard here; Whoop, Garmin and Oura each use their own undisclosed
+formula, so these weights are a documented choice rather than a reference implementation.
+
+`bun test` covers the scoring, the band boundaries, clamping, partial data and the wording.
 
 ### Keeping reads cheap
 
@@ -260,6 +277,7 @@ Unit tests cover the pure logic — URL building, trend maths, date parsing, rel
 
 ```bash
 cd ios && swift test     # 28 tests
+cd server && bun test    # 15 tests, the readiness formula
 ```
 
 `ios/Package.swift` compiles the app's own files from `ProxyHealth/Core` rather than copying

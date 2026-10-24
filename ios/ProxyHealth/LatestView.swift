@@ -10,11 +10,12 @@ struct LatestView: View {
         ScrollView {
             VStack(spacing: 12) {
                 header
+                if let readiness = dashboard.readiness { ReadinessCard(readiness: readiness) }
                 rings
                 todayTiles
-                body_
                 heart
                 fitness
+                body_
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 110)

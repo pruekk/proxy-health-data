@@ -12,6 +12,7 @@ final class Dashboard {
     var syncs: [SyncLogDoc] = []
     var connectors: [ConnectorDoc] = []
     var retentionYears = 1
+    var readiness: ReadinessDoc?
     var isLoading = false
     var error: String?
     var loadedAt: Date?
@@ -46,6 +47,7 @@ final class Dashboard {
         async let syncs: [SyncLogDoc]? = optional(client, "v1/syncs?limit=30")
         async let connectors: [ConnectorDoc]? = optional(client, "v1/connectors")
         async let serverSettings: ServerSettings? = optional(client, "v1/settings")
+        async let readiness: ReadinessDoc? = optional(client, "v1/readiness")
 
         if let metrics = await metrics {
             self.metrics = Dictionary(uniqueKeysWithValues: metrics.map { ($0.type, $0) })
@@ -55,6 +57,7 @@ final class Dashboard {
         if let syncs = await syncs { self.syncs = syncs }
         if let connectors = await connectors { self.connectors = connectors }
         if let serverSettings = await serverSettings { self.retentionYears = serverSettings.retentionYears }
+        self.readiness = await readiness
         self.error = failures.isEmpty ? nil : failures.joined(separator: " · ")
         self.loadedAt = Date()
     }

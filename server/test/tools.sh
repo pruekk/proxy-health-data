@@ -50,7 +50,7 @@ check "dateOfBirth stored" "1990-05-15" "$(echo "$ME" | python3 -c 'import sys,j
 check "biologicalSex stored" "male" "$(echo "$ME" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("biologicalSex"))')"
 
 echo "2. tools/list"
-check "tool count" "11" "$(curl -s -X POST $B/mcp -H "$AUTH" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
+check "tool count" "12" "$(curl -s -X POST $B/mcp -H "$AUTH" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
 
 echo "3. get_latest_values"
 LV=$(call get_latest_values '{"types":["bodyMass","height","vo2Max"]}')
@@ -212,6 +212,36 @@ echo "13c. retention backfill"
 check "dry run stamps nothing" "true" "$(curl -s -X POST "$B/v1/retention/apply?scope=heartRate" -H "$AUTH" | python3 -c 'import sys,json;print(str(json.load(sys.stdin)["dryRun"]).lower())')"
 check "already-stamped rows are skipped" "0" "$(curl -s -X POST "$B/v1/retention/apply?scope=heartRate&dryRun=false" -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
 check "daily scope runs" "1" "$(curl -s -X POST "$B/v1/retention/apply?scope=daily&dryRun=false" -H "$AUTH" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(1 if d["scope"]=="daily" else 0)')"
+
+echo "14. training readiness end to end"
+python3 - "$B" "$TOKEN" <<'PY2'
+import json, sys, urllib.request
+from datetime import date, timedelta
+base, token = sys.argv[1], sys.argv[2]
+stats = []
+# Thirty days of steady baseline, then a day with suppressed HRV and a raised resting pulse.
+for i in range(30):
+    d = (date.today() - timedelta(days=29 - i)).isoformat()
+    last = i == 29
+    stats += [
+        {"date": d, "type": "heartRateVariabilitySDNN", "unit": "ms", "avg": 40 if last else 62},
+        {"date": d, "type": "restingHeartRate", "unit": "count/min", "avg": 68 if last else 60},
+        {"date": d, "type": "appleExerciseTime", "unit": "min", "sum": 30},
+    ]
+req = urllib.request.Request(base + "/v1/sync",
+    data=json.dumps({"timeZone": "Asia/Bangkok", "dailyStats": stats}).encode(),
+    headers={"content-type": "application/json", "authorization": "Bearer " + token})
+urllib.request.urlopen(req)
+print("  seeded 30 days of baseline with a hard last day")
+PY2
+R=$(call get_training_readiness '{}')
+SCORE=$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["score"])')
+check "scores below the ready band" "1" "$([ "$SCORE" -lt 60 ] && echo 1 || echo 0)"
+check "names the band" "1" "$(echo "$R" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["bandLabel"] else 0)')"
+check "headline ends with the advice" "True" "$(echo "$R" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d["headline"].endswith(d["advice"]))')"
+check "reports sleep as missing" "1" "$(echo "$R" | python3 -c 'import sys,json;print(1 if "sleep" in json.load(sys.stdin)["missing"] else 0)')"
+check "says the baseline is personal" "1" "$(echo "$R" | grep -ci 'ไม่ใช่ค่ามาตรฐานประชากร')"
+check "REST route agrees with the tool" "$SCORE" "$(curl -s $B/v1/readiness -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)["score"])')"
 
 echo
 echo "passed: $pass  failed: $fail"

@@ -91,3 +91,46 @@ struct ServerSettings: Codable, Sendable {
     var retentionYears: Int
     var defaultRetentionYears: Int?
 }
+
+struct ReadinessDoc: Codable, Sendable {
+    struct Factor: Codable, Sendable, Identifiable {
+        var key: String
+        var score: Int
+        var value: Double
+        var baseline: Double?
+        var deviation: String?
+        var direction: String
+
+        var id: String { key }
+        var name: String {
+            switch key {
+            case "hrv": "HRV"
+            case "restingHeartRate": "ชีพจรพัก"
+            case "sleep": "การนอน"
+            case "load": "โหลด 7 วัน"
+            default: key
+            }
+        }
+    }
+
+    var score: Int?
+    var band: String?
+    var bandLabel: String?
+    var advice: String?
+    var headline: String?
+    var factors: [Factor]
+    var missing: [String]
+    var basis: String?
+
+    var missingNames: String {
+        missing.map {
+            switch $0 {
+            case "hrv": "HRV"
+            case "restingHeartRate": "ชีพจรพัก"
+            case "sleep": "การนอน"
+            case "load": "โหลดการซ้อม"
+            default: $0
+            }
+        }.joined(separator: ", ")
+    }
+}
