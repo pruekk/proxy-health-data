@@ -6,6 +6,9 @@ struct APIError: LocalizedError {
     var errorDescription: String? { "Server returned \(status): \(body.prefix(300))" }
 }
 
+/// For endpoints that answer `{ "ok": true }` and nothing worth decoding.
+struct OK: Codable, Sendable { var ok: Bool? }
+
 struct APIClient: Sendable {
     let baseURL: URL
     let token: String
@@ -36,6 +39,36 @@ struct APIClient: Sendable {
     @discardableResult
     func sync(_ request: SyncRequest) async throws -> SyncResponse {
         try await send("v1/sync", method: "POST", body: request)
+    }
+
+    func recordSync(_ entry: SyncLogPayload) async throws {
+        let _: OK = try await send("v1/syncs", method: "POST", body: entry)
+    }
+
+    /// Reads for the UI. Raw bytes, because the dashboard decodes with its own date strategy —
+    /// the server sends ISO strings with and without fractional seconds.
+    func getRaw(_ path: String) async throws -> Data {
+        var request = URLRequest(url: baseURL.appending(path: path))
+        request.timeoutInterval = 30
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            throw APIError(status: status, body: String(decoding: data, as: UTF8.self))
+        }
+        return data
+    }
+
+    func put<Body: Encodable>(_ path: String, body: Body) async throws {
+        let _: OK = try await send(path, method: "PUT", body: body)
+    }
+
+    func post(_ path: String) async throws {
+        let _: OK = try await send(path, method: "POST", body: Optional<SyncRequest>.none)
+    }
+
+    func delete(_ path: String) async throws {
+        let _: OK = try await send(path, method: "DELETE", body: Optional<SyncRequest>.none)
     }
 
     /// Like `send`, but treats 304 Not Modified as "nothing to do" instead of an error.

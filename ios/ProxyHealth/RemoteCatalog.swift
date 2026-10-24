@@ -15,6 +15,8 @@ struct RemoteCatalog: Codable, Sendable {
         let unit: String
         let aggregation: String
         var backfill: String?
+        var retention: String?
+        var hourly: Bool?
     }
 
     struct Category: Codable, Sendable {
@@ -27,6 +29,8 @@ struct RemoteCatalog: Codable, Sendable {
         var extendedBackfillDays: Int?
         var workoutDetailLimit: Int?
         var recoveryTailSeconds: Double?
+        var shortRetentionDays: Int?
+        var hourlyRecomputeDays: Int?
     }
 
     let version: String

@@ -104,6 +104,11 @@ Credentials (`GOOGLE_APPLICATION_CREDENTIALS`, gcloud ADC, or the Cloud Run serv
 | `GET /health` | liveness (no auth) |
 | `GET /v1/me` | profile for the token's user |
 | `GET /v1/catalog?version=` | the metric catalog the app syncs; `304` when the version matches |
+| `GET /v1/hourly?from&to` | per-hour buckets (one document per day holds all 24 slots) |
+| `GET\|POST /v1/syncs` | sync history, so it survives a reinstall |
+| `GET\|PUT /v1/settings` | retention in years |
+| `GET /v1/connectors` | OAuth clients currently signed in |
+| `DELETE /v1/data` | removes every health document for the user; profile and tokens stay |
 | `POST /v1/revoke-connectors` | drops every OAuth token this user holds; the static token keeps working |
 | `POST /v1/sync` | iOS upload: `samples`, `deletedSamples`, `workouts`, `deletedWorkoutIds`, `dailyStats`, `activitySummaries`, `profile` |
 | `GET /v1/metrics` | metric list + latest sample |
@@ -128,11 +133,32 @@ Credentials (`GOOGLE_APPLICATION_CREDENTIALS`, gcloud ADC, or the Cloud Run serv
 | `get_body_composition` | weight, height, BMI, body fat, lean mass, waist as one series; BMI derived when absent |
 | `get_cardio_fitness` | VO₂ max trend and level, with resting HR, HRV and HR recovery alongside |
 | `get_workout_detail` | one workout plus its raw HR and speed series, including a recovery tail after it ends |
+| `get_hourly_pattern` | per-hour values across a date range — the shape of the day, over months |
 
 `list_metrics` takes `withSources` to show which apps and devices report each metric, and
 `get_samples` takes a `source` filter. Several sources per metric is normal (Apple Watch, iPhone and
 a third-party ring can all log steps) — daily aggregates are de-duplicated on-device, **raw samples
 are not**, so never sum raw samples for a total.
+
+### Retention
+
+One knob — `retentionYears`, default 2 and settable per user — with one exception. Metrics that
+produce hundreds of samples a day (`retention: 'short'` in the catalog: heart rate, walking and
+running speed, the running-form metrics) keep only `shortRetentionDays` of raw samples, **unless
+the sample was recorded during a workout**, which keeps a run reviewable for as long as the
+workout itself. Everything else — body measurements, VO₂ max, sleep, daily and hourly aggregates,
+workouts — follows the single value.
+
+Expiry is written per document at ingest and swept by Firestore TTL policies on `expiresAt`, so
+nothing runs on a schedule. Two consequences worth knowing: TTL deletes within about 24 hours of
+expiry rather than at the moment, and a document keeps the expiry it was written with — changing
+the retention later only affects new writes. `server/scripts/apply-retention.ts` re-stamps what is
+already stored; run it after deploying and before switching the TTL policies on.
+
+Hourly buckets are the ramp between the two: raw for a few days, hourly for the retention window,
+daily beyond. The phone computes them with the same `HKStatisticsCollectionQuery` as the daily
+stats — so iPhone/Watch/third-party overlap is already resolved — and the server stores one
+document per day holding all 24 slots, which is 365 documents a year rather than tens of thousands.
 
 ### Keeping reads cheap
 
@@ -211,6 +237,15 @@ gcloud run deploy proxy-health-api --source . --project proxy-health-data --regi
   then redeploy (or `gcloud run services update proxy-health-api --region asia-southeast1`) so a new revision reads `latest`.
 
 ## iOS app
+
+Three tabs under a floating bar: **ล่าสุด** (current values, with the measurement date on
+slow-moving ones), **ประวัติ** (sync timeline, data coverage, recent workouts) and **ตั้งค่า**
+(connection, retention, and the rarely-used actions). The screens read from the server rather than
+from HealthKit, so what the app shows is what the AI tools see. `design/ui-mockup.html` is the
+static mockup the layout came from.
+
+Automatic syncs run when the app comes to the foreground and, if background delivery is on, when
+HealthKit wakes the app. Both are rate limited to one sync every two minutes; a manual tap is not.
 
 1. Open `ios/ProxyHealth.xcodeproj` in Xcode.
 2. Target → Signing & Capabilities: pick your Team (the HealthKit capability and background

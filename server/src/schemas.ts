@@ -21,6 +21,9 @@ export const SampleInput = t.Object({
   sourceBundleId: t.Optional(t.String()),
   device: t.Optional(t.String()),
   metadata: t.Optional(Metadata),
+  // Set by the per-workout backfill. Samples recorded during a workout are kept for the full
+  // retention even when their metric is on the short raw window.
+  context: t.Optional(t.Literal('workout')),
 })
 
 export const WorkoutInput = t.Object({
@@ -58,6 +61,18 @@ export const DailyStatInput = t.Object({
   max: t.Optional(t.Number()),
 })
 
+// One hour's aggregate for one metric. Same shape as the daily stat, with the local hour.
+export const HourlyStatInput = t.Object({
+  date: DateKey,
+  hour: t.Integer({ minimum: 0, maximum: 23 }),
+  type: MetricKey,
+  unit: t.String(),
+  sum: t.Optional(t.Number()),
+  avg: t.Optional(t.Number()),
+  min: t.Optional(t.Number()),
+  max: t.Optional(t.Number()),
+})
+
 // Apple Fitness activity rings for one day.
 export const ActivitySummaryInput = t.Object({
   date: DateKey,
@@ -78,6 +93,18 @@ export const ProfileInput = t.Object({
   biologicalSex: t.Optional(t.Union([t.Literal('female'), t.Literal('male'), t.Literal('other')])),
 })
 
+export const SyncLogInput = t.Object({
+  startedAt: IsoDate,
+  durationMs: t.Number(),
+  trigger: t.Union([t.Literal('manual'), t.Literal('foreground'), t.Literal('background')]),
+  samples: t.Integer(),
+  deletedSamples: t.Optional(t.Integer()),
+  workouts: t.Integer(),
+  days: t.Integer(),
+  catalogVersion: t.Optional(t.String({ maxLength: 64 })),
+  errors: t.Optional(t.Array(t.String({ maxLength: 300 }), { maxItems: 40 })),
+})
+
 export const SyncBody = t.Object({
   timeZone: t.Optional(t.String({ maxLength: 64 })),
   profile: t.Optional(ProfileInput),
@@ -88,6 +115,7 @@ export const SyncBody = t.Object({
   workouts: t.Optional(t.Array(WorkoutInput, { maxItems: 1000 })),
   deletedWorkoutIds: t.Optional(t.Array(ObjectId, { maxItems: 1000 })),
   dailyStats: t.Optional(t.Array(DailyStatInput, { maxItems: 10000 })),
+  hourlyStats: t.Optional(t.Array(HourlyStatInput, { maxItems: 10000 })),
   activitySummaries: t.Optional(t.Array(ActivitySummaryInput, { maxItems: 1000 })),
 })
 
@@ -95,5 +123,7 @@ export type ProfileInput = Static<typeof ProfileInput>
 export type SampleInput = Static<typeof SampleInput>
 export type WorkoutInput = Static<typeof WorkoutInput>
 export type DailyStatInput = Static<typeof DailyStatInput>
+export type HourlyStatInput = Static<typeof HourlyStatInput>
 export type ActivitySummaryInput = Static<typeof ActivitySummaryInput>
+export type SyncLogInput = Static<typeof SyncLogInput>
 export type SyncBody = Static<typeof SyncBody>
