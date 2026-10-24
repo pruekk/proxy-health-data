@@ -1,5 +1,6 @@
 import { Elysia, t } from 'elysia'
 import { auth } from './auth'
+import { catalog } from './catalog'
 import { parseDateKeys, parseRange } from './dates'
 import { env } from './env'
 import { handleMcp } from './mcp'
@@ -52,6 +53,15 @@ export const app = new Elysia()
     v1
       .use(auth)
       .get('/me', ({ uid }) => getProfile(uid))
+      // The metric catalog the app syncs. Served from here so adding a metric is a deploy
+      // rather than a rebuild; `version` lets the app skip the work when nothing changed.
+      .get('/catalog', ({ query, set }) => {
+        if (query.version === catalog.version) {
+          set.status = 304
+          return ''
+        }
+        return catalog
+      }, { query: t.Object({ version: t.Optional(t.String({ maxLength: 64 })) }) })
       // Signs this user's connectors out everywhere. The static API token still works, so the
       // iOS app and Claude Code keep syncing.
       .post('/revoke-connectors', async ({ uid }) => ({ ok: true, revoked: await revokeUserTokens(uid) }))

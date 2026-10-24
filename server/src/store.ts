@@ -72,18 +72,47 @@ function dailyDocs(stats: DailyStatInput[], rings: ActivitySummaryInput[]): Map<
 export async function ingest(uid: string, body: SyncBody) {
   const now = FieldValue.serverTimestamp()
   const ops: Op[] = []
-  const touchedMetrics = new Map<string, { kind: string; unit?: string }>()
+  // Per type: the newest sample and a count per recording source, both denormalised onto the
+  // metric document below so reads never fan out one query per metric.
+  const touchedMetrics = new Map<
+    string,
+    { kind: string; unit?: string; newest?: SampleInput; sources: Map<string, number> }
+  >()
 
   for (const s of body.samples ?? []) {
     const doc = sampleDoc(s)
     ops.push((b) => b.set(samplesCol(uid, s.type).doc(s.id), doc))
-    touchedMetrics.set(s.type, { kind: s.kind, unit: s.unit })
+    const entry = touchedMetrics.get(s.type) ?? {
+      kind: s.kind,
+      unit: s.unit,
+      sources: new Map<string, number>(),
+    }
+    entry.kind = s.kind
+    entry.unit = s.unit ?? entry.unit
+    if (!entry.newest || s.startDate > entry.newest.startDate) entry.newest = s
+    const source = s.sourceName ?? 'unknown'
+    entry.sources.set(source, (entry.sources.get(source) ?? 0) + 1)
+    touchedMetrics.set(s.type, entry)
   }
   for (const { type, ids } of body.deletedSamples ?? []) {
     for (const id of ids) ops.push((b) => b.delete(samplesCol(uid, type).doc(id)))
   }
-  for (const [type, info] of touchedMetrics) {
-    ops.push((b) => b.set(metricsCol(uid).doc(type), { type, ...info, lastSyncAt: now }, { merge: true }))
+  for (const [type, { kind, unit, newest, sources }] of touchedMetrics) {
+    const doc: DocumentData = { type, kind, unit, lastSyncAt: now }
+    if (newest) {
+      // Nested maps, not dotted keys: `set` with merge treats a dotted key as a literal field
+      // name, while a nested map merges field by field and keeps increments working.
+      doc.latest = {
+        id: newest.id,
+        value: newest.value,
+        unit: newest.unit,
+        valueLabel: newest.valueLabel,
+        startDate: toTimestamp(newest.startDate),
+        sourceName: newest.sourceName,
+      }
+    }
+    doc.sources = Object.fromEntries([...sources].map(([source, count]) => [source, FieldValue.increment(count)]))
+    ops.push((b) => b.set(metricsCol(uid).doc(type), doc, { merge: true }))
   }
 
   for (const w of body.workouts ?? []) {
@@ -137,12 +166,28 @@ export async function listMetrics(uid: string, types?: string[], withSources = f
   const docs = types?.length ? snap.docs.filter((d) => types.includes(d.id)) : snap.docs
   return Promise.all(
     docs.map(async (doc) => {
-      const latest = await samplesCol(uid, doc.id).orderBy('startDate', 'desc').limit(1).get()
-      const sample = latest.docs[0]
-      const base = { ...plain(doc.data()), type: doc.id, latest: sample ? { id: sample.id, ...plain(sample.data()) } : null }
-      return withSources ? { ...base, sources: await metricSources(uid, doc.id) } : base
+      const { latest, sources, ...rest } = plain(doc.data())
+      // Docs written before `latest` was denormalised still need the old per-metric query.
+      const resolved = latest ?? (await legacyLatest(uid, doc.id))
+      const base = { ...rest, type: doc.id, latest: resolved ?? null }
+      if (!withSources) return base
+      const counts = sources as Record<string, number> | undefined
+      return {
+        ...base,
+        sources: counts
+          ? Object.entries(counts)
+              .map(([source, count]) => ({ source, count }))
+              .sort((a, b) => b.count - a.count)
+          : await metricSources(uid, doc.id),
+      }
     }),
   )
+}
+
+async function legacyLatest(uid: string, type: string) {
+  const snap = await samplesCol(uid, type).orderBy('startDate', 'desc').limit(1).get()
+  const doc = snap.docs[0]
+  return doc ? { id: doc.id, ...plain(doc.data()) } : null
 }
 
 // Which apps and devices report a metric, newest first. A metric with more than one source
@@ -206,20 +251,17 @@ export async function getWorkout(uid: string, id: string): Promise<DocumentData 
 }
 
 export async function queryWorkouts(uid: string, range: Range, limit: number, activityType?: string) {
-  const snap = await workoutsCol(uid)
+  // Equality on activityTypeName is served by the automatic single-field index, so an activity
+  // filter no longer means reading 1000 docs and throwing most of them away.
+  let query = workoutsCol(uid)
     .where('startDate', '>=', Timestamp.fromDate(range.from))
     .where('startDate', '<', Timestamp.fromDate(range.to))
-    .orderBy('startDate', 'desc')
-    .limit(activityType ? 1000 : limit)
-    .get()
-  const needle = activityType?.toLowerCase()
-  return snap.docs
-    .map((d): DocumentData => {
-      const data = plain(d.data())
-      return { id: d.id, ...data, ...weatherOf(data.metadata) }
-    })
-    .filter((w) => !needle || String(w.activityTypeName).toLowerCase() === needle)
-    .slice(0, limit)
+  if (activityType) query = query.where('activityTypeName', '==', activityType)
+  const snap = await query.orderBy('startDate', 'desc').limit(limit).get()
+  return snap.docs.map((d): DocumentData => {
+    const data = plain(d.data())
+    return { id: d.id, ...data, ...weatherOf(data.metadata) }
+  })
 }
 
 export async function queryDaily(uid: string, fromDate: string, toDate: string, metrics?: string[]) {

@@ -151,12 +151,26 @@ const tools: Tool[] = [
       properties: {
         ...dayRange,
         metrics: { type: 'array', items: { type: 'string' }, description: 'Optional metric keys to include. Omit for all.' },
+        fields: {
+          type: 'array',
+          items: { type: 'string', enum: ['sum', 'avg', 'min', 'max'] },
+          description: 'Which statistics to keep per metric. Defaults to all four; narrowing this cuts the response a lot over long ranges.',
+        },
       },
     },
     run: async (uid, args) => {
       const keys = parseDateKeys(str(args.from), str(args.to), 7, await timeZoneOf(uid))
       const metrics = Array.isArray(args.metrics) ? args.metrics.map(String) : undefined
-      return { ...keys, days: await queryDaily(uid, keys.from, keys.to, metrics) }
+      const fields = Array.isArray(args.fields) ? args.fields.map(String) : undefined
+      const days = await queryDaily(uid, keys.from, keys.to, metrics)
+      if (!fields?.length) return { ...keys, days }
+      for (const day of days) {
+        const dayMetrics = day.metrics as Record<string, Record<string, unknown>> | undefined
+        for (const [type, values] of Object.entries(dayMetrics ?? {})) {
+          dayMetrics![type] = Object.fromEntries(Object.entries(values).filter(([k]) => fields.includes(k)))
+        }
+      }
+      return { ...keys, fields, days }
     },
   },
   {
@@ -283,7 +297,9 @@ const tools: Tool[] = [
       const series = await dailySeries(uid, keys.from, keys.to, types)
       return {
         ...keys,
-        metrics: Object.fromEntries(types.map((type) => [type, summarize((series[type] ?? []) as DocumentDataLike[])])),
+        metrics: Object.fromEntries(
+          types.map((type) => [type, summarize((series[type] ?? []) as DocumentDataLike[]) ?? { days: 0 }]),
+        ),
       }
     },
   },
@@ -331,6 +347,10 @@ const tools: Tool[] = [
       properties: {
         workoutId: { type: 'string', description: 'Workout id from get_workouts.' },
         recoveryMinutes: { type: 'number', description: 'Minutes of samples to include after the workout ends (default 10, max 60).' },
+        maxPoints: {
+          type: 'number',
+          description: 'Cap on points per series (default 400, max 2000). Evenly thinned, keeping the first and last point, so shape and recovery stay readable.',
+        },
       },
       required: ['workoutId'],
     },
@@ -350,16 +370,24 @@ const tools: Tool[] = [
         querySamples(uid, speedMetric, { from, to }, 2000),
       ])
       // Oldest first reads better as a time series than the newest-first default.
-      const series = (samples: Record<string, unknown>[]) =>
-        samples
+      const maxPoints = num(args.maxPoints, 400, 2000)
+      const series = (samples: Record<string, unknown>[]) => {
+        const points = samples
           .map((s) => ({ at: s.startDate as string, value: s.value as number }))
           .sort((a, b) => a.at.localeCompare(b.at))
+        if (points.length <= maxPoints) return points
+        // Even stride, with the last point forced in so the recovery tail is never dropped.
+        const stride = (points.length - 1) / (maxPoints - 1)
+        const thinned = Array.from({ length: maxPoints - 1 }, (_, i) => points[Math.round(i * stride)]!)
+        return [...thinned, points[points.length - 1]!]
+      }
 
       return {
         workout,
         window: { from: from.toISOString(), to: to.toISOString(), recoveryMinutes: recovery },
         heartRate: { unit: 'count/min', count: heartRate.length, truncated: heartRate.length >= 2000, series: series(heartRate) },
         speed: { type: speedMetric, unit: 'm/s', count: speed.length, truncated: speed.length >= 2000, series: series(speed) },
+        note: 'count is the number of samples found; series may be thinned to maxPoints.',
       }
     },
   },
@@ -390,7 +418,10 @@ const tools: Tool[] = [
         age: age ?? null,
         biologicalSex: profile.biologicalSex ?? null,
         supporting: Object.fromEntries(
-          CARDIO_METRICS.filter((m) => m !== 'vo2Max').map((m) => [m, summarize((series[m] ?? []) as DocumentDataLike[])]),
+          CARDIO_METRICS.filter((m) => m !== 'vo2Max').map((m) => [
+            m,
+            summarize((series[m] ?? []) as DocumentDataLike[]) ?? { days: 0 },
+          ]),
         ),
       }
     },
@@ -409,12 +440,29 @@ interface RpcRequest {
 const ok = (id: RpcRequest['id'], result: unknown) => ({ jsonrpc: '2.0', id, result })
 const fail = (id: RpcRequest['id'], code: number, message: string) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } })
 
+// Firestore hands back values like 3.239000000000001 and plenty of empty fields; at a few
+// thousand values per response that is most of the payload, and every byte is model context.
+function slim(value: unknown): unknown {
+  if (typeof value === 'number') return Number.isInteger(value) ? value : Number(value.toFixed(3))
+  if (Array.isArray(value)) return value.map(slim)
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [key, v] of Object.entries(value)) {
+      if (v === null || v === undefined) continue
+      out[key] = slim(v)
+    }
+    return out
+  }
+  return value
+}
+
 async function callTool(uid: string, params: Json | undefined) {
   const tool = tools.find((t) => t.name === params?.name)
   if (!tool) return null
   try {
     const result = await tool.run(uid, (params?.arguments as Args) ?? {})
-    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+    // Compact JSON: indentation on a 100k-value response is pure overhead.
+    return { content: [{ type: 'text', text: JSON.stringify(slim(result)) }] }
   } catch (error) {
     // Tool errors are returned as results so the model can see and correct them.
     const message = error instanceof Error ? error.message : String(error)

@@ -32,7 +32,22 @@ iPhone (HealthKit) ──POST /v1/sync──▶ Elysia server (Bun) ──▶ Fi
   removes iPhone + Watch double counting).
 - **Activity rings** (`HKActivitySummary`): move/exercise/stand and goals.
 
-How far back the **first** sync reaches is per metric (`Backfill` in `HealthCatalog.swift`):
+### The catalog lives on the server
+
+`server/src/catalog.ts` is the source of truth for which HealthKit types are synced, their units,
+aggregation and backfill policy. The app downloads it (`GET /v1/catalog`, skipped on a `304`),
+caches it, and asks for any read permission the new entries need — iOS only prompts for types it
+has not decided yet, so topping up is free. **Adding a metric is a deploy, not a rebuild.**
+
+`HealthCatalog.swift` keeps a built-in copy as the fallback for a first launch, an offline launch,
+or an unreachable server. Entries the device cannot resolve — an identifier this iOS version does
+not know, a unit outside `HealthCatalog.unit(named:)` — are skipped and reported in the sync log,
+so one bad entry costs one metric rather than the whole sync.
+
+Still needs a rebuild: new payload fields, new HealthKit concepts (workout routes, ECG), UI changes
+and anything that changes the sync algorithm itself.
+
+How far back the **first** sync reaches is per metric (`Backfill`, set in the catalog):
 
 | Policy | Metrics | Why |
 | --- | --- | --- |
@@ -88,6 +103,7 @@ Credentials (`GOOGLE_APPLICATION_CREDENTIALS`, gcloud ADC, or the Cloud Run serv
 | --- | --- |
 | `GET /health` | liveness (no auth) |
 | `GET /v1/me` | profile for the token's user |
+| `GET /v1/catalog?version=` | the metric catalog the app syncs; `304` when the version matches |
 | `POST /v1/revoke-connectors` | drops every OAuth token this user holds; the static token keeps working |
 | `POST /v1/sync` | iOS upload: `samples`, `deletedSamples`, `workouts`, `deletedWorkoutIds`, `dailyStats`, `activitySummaries`, `profile` |
 | `GET /v1/metrics` | metric list + latest sample |
@@ -117,6 +133,21 @@ Credentials (`GOOGLE_APPLICATION_CREDENTIALS`, gcloud ADC, or the Cloud Run serv
 `get_samples` takes a `source` filter. Several sources per metric is normal (Apple Watch, iPhone and
 a third-party ring can all log steps) — daily aggregates are de-duplicated on-device, **raw samples
 are not**, so never sum raw samples for a total.
+
+### Keeping reads cheap
+
+Every tool response is slimmed before it leaves the server: floats are rounded to three decimals,
+empty fields are dropped and the JSON is not indented. Firestore hands back values like
+`3.239000000000001`, and at a few thousand values per response that noise is most of the payload —
+and every byte of it is model context. On real data that is a 49% cut; combined with the `metrics`
+and `fields` arguments on `get_daily_summaries`, 115 days goes from 242 KB to 38 KB.
+
+`metrics/{type}` also carries a denormalised `latest` sample and per-source counts, written during
+ingest. `list_metrics` used to issue one extra query per metric (23 and growing) and `withSources`
+a 500-document scan each; both are now a single collection read. `get_workouts` filters by activity
+in the query instead of reading 1000 documents and discarding most of them, and
+`get_workout_detail` thins its series to `maxPoints` (keeping the last point, so the recovery tail
+survives).
 
 `get_latest_values` falls back to the most recent daily aggregate when a metric has no recent raw
 sample (weight is weighed less often than the 7-day raw window), and says which it used in a `from`
