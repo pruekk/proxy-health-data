@@ -19,7 +19,7 @@ struct ProxyHealthApp: App {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, model.isAuthorized, model.settings.isConfigured {
-                Task { await model.syncNow() }
+                Task { await model.syncNow(trigger: .foreground) }
             }
         }
     }

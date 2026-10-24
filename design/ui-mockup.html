@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Proxy Health — UI mockup</title>
+<style>
+  :root{
+    --brand-teal:#2bb3bf; --brand-blue:#2d8abd; --brand-indigo:#5762b1;
+    --ink:#1c1c1e; --ink-2:#48484a; --muted:#8a8a8e; --hair:#ececf0;
+    --card:#fff; --bg:#e9e9ec;
+    --move:#f2544b; --exercise:#8ed24a; --stand:#45c6d6;
+    --radius:22px;
+    --shadow:0 1px 3px rgba(16,24,40,.05), 0 10px 28px -12px rgba(16,24,40,.22);
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05), 0 4px 12px -6px rgba(16,24,40,.18);
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{
+    margin:0;padding:40px 24px 64px;background:var(--bg);color:var(--ink);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+    background-image:radial-gradient(circle at 20% 10%,rgba(255,255,255,.7),transparent 45%);
+  }
+  .page-head{max-width:1360px;margin:0 auto 28px}
+  .page-head h1{margin:0 0 4px;font-size:20px;letter-spacing:-.01em}
+  .page-head p{margin:0;color:var(--muted);font-size:13px}
+  .stage{display:flex;gap:40px;justify-content:center;flex-wrap:wrap;max-width:1360px;margin:0 auto}
+  .phone-wrap{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .phone-wrap > .caption{font-size:12px;color:var(--muted);letter-spacing:.02em}
+  .phone{
+    position:relative;width:390px;height:844px;border-radius:46px;background:#f5f5f7;
+    box-shadow:0 2px 6px rgba(16,24,40,.08), 0 40px 80px -30px rgba(16,24,40,.45);
+    overflow:hidden;border:1px solid rgba(0,0,0,.06)
+  }
+  /* chrome */
+  .statusbar{display:flex;justify-content:space-between;align-items:center;padding:14px 26px 2px;font-size:14px;font-weight:600}
+  .statusbar .icons{display:flex;gap:5px;align-items:center;opacity:.9}
+  .bars{display:flex;gap:2px;align-items:flex-end;height:11px}
+  .bars i{display:block;width:3px;background:var(--ink);border-radius:1px}
+  .bars i:nth-child(1){height:4px}.bars i:nth-child(2){height:6px}.bars i:nth-child(3){height:9px}.bars i:nth-child(4){height:11px}
+  .batt{width:24px;height:12px;border:1.5px solid var(--ink);border-radius:3.5px;position:relative;padding:1.5px}
+  .batt::after{content:"";position:absolute;right:-3.5px;top:3.5px;width:2px;height:5px;background:var(--ink);border-radius:0 1px 1px 0}
+  .batt b{display:block;height:100%;width:78%;background:var(--ink);border-radius:1.5px}
+  .screen{height:calc(844px - 36px);overflow-y:auto;padding:4px 18px 120px;scrollbar-width:none}
+  .screen::-webkit-scrollbar{display:none}
+  .apphead{display:flex;align-items:center;justify-content:space-between;padding:8px 2px 16px}
+  .apphead h2{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em}
+  .apphead .sub{font-size:13px;color:var(--muted);margin-top:2px}
+  .avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700;
+    background:linear-gradient(135deg,var(--brand-teal),var(--brand-indigo))}
+  /* building blocks */
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+  .card + .card{margin-top:12px}
+  h3.sec{margin:26px 2px 10px;font-size:17px;font-weight:700;letter-spacing:-.01em}
+  h3.sec .hint{float:right;font-size:12px;font-weight:500;color:var(--muted);letter-spacing:0}
+  .label{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid2 .card{padding:14px;margin:0}
+  .tile .top{display:flex;align-items:center;gap:7px;color:var(--ink-2);font-size:13px;font-weight:500}
+  .tile .top svg{width:16px;height:16px;flex:none}
+  .tile .val{margin-top:10px;font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .tile .val small{font-size:13px;font-weight:600;color:var(--muted);margin-left:3px;letter-spacing:0}
+  .tile .meta{margin-top:6px;font-size:11.5px;color:var(--muted)}
+  .trend{font-size:11.5px;font-weight:600;padding:2px 6px;border-radius:7px;display:inline-block}
+  .down{color:#1f9d55;background:#e9f7ef}.up{color:#c0392b;background:#fdeceb}.flat{color:var(--muted);background:#f1f1f4}
+  .stale{color:#b26a00;background:#fdf3e2}
+  .row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--hair)}
+  .row:last-child{border-bottom:0;padding-bottom:2px}.row:first-child{padding-top:2px}
+  .row .ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none;background:#f3f3f6}
+  .row .ic svg{width:18px;height:18px}
+  .row .txt{flex:1;min-width:0}
+  .row .txt b{display:block;font-size:14.5px;font-weight:600}
+  .row .txt span{display:block;font-size:12px;color:var(--muted);margin-top:1px}
+  .row .end{font-size:14px;font-weight:600;color:var(--ink-2);text-align:right;white-space:nowrap}
+  .row .end em{display:block;font-style:normal;font-size:11.5px;font-weight:500;color:var(--muted)}
+  .chev{color:#c3c3c8;flex:none}
+  .coaching{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-top:12px}
+  .coaching p{margin:7px 0 0;font-size:14px;line-height:1.5;color:var(--ink-2)}
+  /* rings */
+  .rings{display:flex;justify-content:space-around;align-items:flex-start;padding:4px 0 2px}
+  .ring{text-align:center;width:33%}
+  .ring svg{display:block;margin:0 auto}
+  .ring .pct{font-size:20px;font-weight:700;letter-spacing:-.02em}
+  .ring .nm{font-size:12px;color:var(--muted);margin-top:7px;font-weight:500}
+  .ring .amt{font-size:11px;color:#b0b0b5;margin-top:1px}
+  /* bars */
+  .bar{height:8px;border-radius:5px;background:#eeeef2;overflow:hidden;margin-top:9px}
+  .bar b{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--brand-teal),var(--brand-indigo))}
+  /* settings */
+  .list{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:2px 16px}
+  .danger .txt b{color:#d0352b}
+  .toggle{width:46px;height:28px;border-radius:16px;background:#8ed24a;position:relative;flex:none}
+  .toggle.off{background:#e2e2e7}
+  .toggle::after{content:"";position:absolute;top:2.5px;right:2.5px;width:23px;height:23px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .toggle.off::after{right:auto;left:2.5px}
+  .seg{display:flex;background:#f0f0f3;border-radius:11px;padding:3px;gap:2px}
+  .seg span{flex:1;text-align:center;font-size:12.5px;font-weight:600;padding:6px 0;border-radius:9px;color:var(--muted)}
+  .seg span.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  /* timeline */
+  .tl{position:relative;padding-left:26px}
+  .tl::before{content:"";position:absolute;left:7px;top:10px;bottom:10px;width:2px;background:var(--hair)}
+  .tl .ev{position:relative;padding:11px 0}
+  .tl .ev::before{content:"";position:absolute;left:-23px;top:16px;width:10px;height:10px;border-radius:50%;background:var(--brand-blue);border:2px solid #fff;box-shadow:0 0 0 2px var(--hair)}
+  .tl .ev.warn::before{background:#e8a33d}
+  .tl .ev b{font-size:14px;font-weight:600}
+  .tl .ev time{font-size:11.5px;color:var(--muted);margin-left:7px;font-weight:500}
+  .tl .ev p{margin:3px 0 0;font-size:12.5px;color:var(--muted);line-height:1.45}
+  /* tab bar */
+  .tabbar{
+    position:absolute;left:18px;right:18px;bottom:16px;height:66px;border-radius:33px;
+    background:rgba(255,255,255,.82);backdrop-filter:saturate(180%) blur(22px);
+    -webkit-backdrop-filter:saturate(180%) blur(22px);
+    box-shadow:0 1px 3px rgba(16,24,40,.06), 0 14px 34px -10px rgba(16,24,40,.3);
+    display:flex;align-items:center;justify-content:space-around;padding:0 10px;
+    border:1px solid rgba(255,255,255,.7)
+  }
+  .tab{display:flex;flex-direction:column;align-items:center;gap:4px;color:#9a9aa0;font-size:11px;font-weight:600;cursor:pointer;padding:6px 14px;border-radius:20px;transition:.18s}
+  .tab svg{width:23px;height:23px}
+  .tab.on{color:var(--brand-blue)}
+  .tab.on svg{filter:drop-shadow(0 2px 5px rgba(45,138,189,.35))}
+  .homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:138px;height:5px;border-radius:3px;background:rgba(0,0,0,.28)}
+  .iconbtn{
+    width:34px;height:34px;border-radius:50%;border:0;background:#fff;color:var(--brand-blue);
+    box-shadow:var(--shadow-sm);display:grid;place-items:center;cursor:pointer;padding:0
+  }
+  .iconbtn svg{width:17px;height:17px}
+  .primary{
+    width:100%;margin-top:14px;height:46px;border:0;border-radius:15px;cursor:pointer;
+    background:linear-gradient(135deg,var(--brand-teal),var(--brand-indigo));color:#fff;
+    font:600 15px/1 -apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:.01em;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    box-shadow:0 6px 16px -6px rgba(45,138,189,.7)
+  }
+  .primary svg{width:17px;height:17px}
+  .pull{text-align:center;font-size:11.5px;color:#b0b0b5;padding:2px 0 8px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="page-head">
+  <h1>Proxy Health — UI mockup</h1>
+  <p>3 แท็บ · footer แบบลอย (อ้างอิง Bevel) · ตัวเลขทั้งหมดคือข้อมูลจริงจาก Firestore วันที่ 24 ต.ค. 2569 — กดแท็บด้านล่างของแต่ละเครื่องเพื่อสลับหน้าได้</p>
+</div>
+
+<div class="stage">
+
+<!-- ============ PHONE 1 : ล่าสุด ============ -->
+<div class="phone-wrap">
+<div class="phone" id="p1">
+  <div class="statusbar"><span>9:41</span>
+    <span class="icons"><span class="bars"><i></i><i></i><i></i><i></i></span>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 10.5l2-2.2a2.9 2.9 0 00-4 0l2 2.2z" fill="#1c1c1e"/><path d="M3.6 5.6a6.5 6.5 0 018.8 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/><path d="M1 3a10 10 0 0114 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span class="batt"><b></b></span></span>
+  </div>
+
+  <!-- TAB: ล่าสุด -->
+  <div class="screen" data-tab="latest">
+    <div class="apphead">
+      <div><h2>วันนี้</h2><div class="sub">ศุกร์ 24 ต.ค. · ซิงก์เมื่อ 3 นาทีที่แล้ว</div></div>
+      <div style="display:flex;align-items:center;gap:9px">
+        <button class="iconbtn" title="ซิงก์เดี๋ยวนี้">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 11-2.6-5.9M20 4v4h-4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="avatar">AC</div>
+      </div>
+    </div>
+
+    <div class="pull">↓ ดึงลงเพื่อซิงก์</div>
+    <div class="card">
+      <div class="rings">
+        <div class="ring">
+          <svg width="92" height="92" viewBox="0 0 92 92">
+            <circle cx="46" cy="46" r="36" stroke="#f0f0f3" stroke-width="11" fill="none"/>
+            <circle cx="46" cy="46" r="36" stroke="var(--move)" stroke-width="11" fill="none" stroke-linecap="round"
+                    stroke-dasharray="226 226" stroke-dashoffset="0" transform="rotate(-90 46 46)"/>
+            <text x="46" y="51" text-anchor="middle" class="pct" fill="#1c1c1e" font-size="19" font-weight="700">148%</text>
+          </svg>
+          <div class="nm">เคลื่อนไหว</div><div class="amt">472 / 320 kcal</div>
+        </div>
+        <div class="ring">
+          <svg width="92" height="92" viewBox="0 0 92 92">
+            <circle cx="46" cy="46" r="36" stroke="#f0f0f3" stroke-width="11" fill="none"/>
+            <circle cx="46" cy="46" r="36" stroke="var(--exercise)" stroke-width="11" fill="none" stroke-linecap="round"
+                    stroke-dasharray="226 226" stroke-dashoffset="0" transform="rotate(-90 46 46)"/>
+            <text x="46" y="51" text-anchor="middle" fill="#1c1c1e" font-size="19" font-weight="700">167%</text>
+          </svg>
+          <div class="nm">ออกกำลัง</div><div class="amt">50 / 30 นาที</div>
+        </div>
+        <div class="ring">
+          <svg width="92" height="92" viewBox="0 0 92 92">
+            <circle cx="46" cy="46" r="36" stroke="#f0f0f3" stroke-width="11" fill="none"/>
+            <circle cx="46" cy="46" r="36" stroke="var(--stand)" stroke-width="11" fill="none" stroke-linecap="round"
+                    stroke-dasharray="90 226" transform="rotate(-90 46 46)"/>
+            <text x="46" y="51" text-anchor="middle" fill="#1c1c1e" font-size="19" font-weight="700">40%</text>
+          </svg>
+          <div class="nm">ยืน</div><div class="amt">4 / 10 ชม.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div class="card tile">
+        <div class="top"><svg viewBox="0 0 24 24" fill="none"><path d="M4 13h3l2-5 3 9 2.5-6 1.5 2H20" stroke="#f2544b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>ก้าว</div>
+        <div class="val">10,706</div><div class="meta">เฉลี่ย 7 วัน 9,480</div>
+      </div>
+      <div class="card tile">
+        <div class="top"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20s-7-4.6-7-9.2A3.8 3.8 0 0112 8.6a3.8 3.8 0 017 2.2C19 15.4 12 20 12 20z" stroke="#e0566a" stroke-width="2" stroke-linejoin="round"/></svg>ชีพจรพัก</div>
+        <div class="val">69<small>bpm</small></div><div class="meta"><span class="trend up">+7 จาก baseline</span></div>
+      </div>
+    </div>
+
+    <h3 class="sec">ร่างกาย <span class="hint">วัดล่าสุด 15 ต.ค. · 9 วันก่อน</span></h3>
+    <div class="card">
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M5 9h14l-1.2 10H6.2L5 9z" stroke="#2d8abd" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 9V6.5a3 3 0 016 0V9" stroke="#2d8abd" stroke-width="1.8"/></svg></div>
+        <div class="txt"><b>น้ำหนัก</b><span>8 ครั้งใน 90 วัน</span></div>
+        <div class="end">75.35 <em>kg · <span class="trend down">−1.9 kg / 90 วัน</span></em></div>
+      </div>
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 4v16M8 7h8M8 17h8" stroke="#5762b1" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="txt"><b>ส่วนสูง</b><span>เพิ่งเพิ่มใน Health เมื่อ 23 ต.ค.</span></div>
+        <div class="end">— <em>รอซิงก์</em></div>
+      </div>
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="#2bb3bf" stroke-width="1.8"/><path d="M12 7.5v5l3 1.8" stroke="#2bb3bf" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="txt"><b>BMI</b><span>น้ำหนักเกินเล็กน้อย</span></div>
+        <div class="end">26.7 <em>คำนวณจากน้ำหนัก</em></div>
+      </div>
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 4c3 4 5 6.2 5 9a5 5 0 01-10 0c0-2.8 2-5 5-9z" stroke="#e8a33d" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>ไขมัน / มวลไร้ไขมัน</b><span>วัดด้วยเครื่องชั่ง</span></div>
+        <div class="end">24.6% <em>56.8 kg lean</em></div>
+      </div>
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M7 9v6M17 9v6" stroke="#8a8a8e" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="txt"><b>รอบเอว</b><span>ยังไม่มีข้อมูล</span></div>
+        <div class="end">— <em>ไม่ได้บันทึก</em></div>
+      </div>
+    </div>
+
+    <h3 class="sec">หัวใจและการหายใจ</h3>
+    <div class="grid2">
+      <div class="card tile"><div class="top">HRV</div><div class="val">42.8<small>ms</small></div><div class="meta">เฉลี่ย 30 วัน 58.1</div></div>
+      <div class="card tile"><div class="top">หายใจ</div><div class="val">13<small>/นาที</small></div><div class="meta">ปกติ</div></div>
+      <div class="card tile"><div class="top">ชีพจรตอนเดิน</div><div class="val">111<small>bpm</small></div><div class="meta">7 วันคงที่</div></div>
+      <div class="card tile"><div class="top">นอนหลับ</div><div class="val">6<small>ชม. 34</small></div><div class="meta">ลึก 59 · REM 71 นาที</div></div>
+    </div>
+
+    <h3 class="sec">ความฟิต</h3>
+    <div class="card">
+      <div class="row">
+        <div class="ic" style="background:#fdf3e2"><svg viewBox="0 0 24 24" fill="none"><path d="M5 17l4-6 3 3 3-6 4 9" stroke="#b26a00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>VO₂ max</b><span>Apple หยุดคำนวณตั้งแต่เติมส่วนสูงหาย</span></div>
+        <div class="end">32.9 <em><span class="trend stale">27 ส.ค. 2567</span></em></div>
+      </div>
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 14c3 0 3-5 6-5s3 7 6 7 4-4 4-4" stroke="#1f9d55" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div class="txt"><b>ฟื้นตัวหลังออกกำลัง</b><span>HR recovery 1 นาที</span></div>
+        <div class="end">15.5 <em>bpm</em></div>
+      </div>
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="5.5" r="2" stroke="#2d8abd" stroke-width="1.8"/><path d="M6 20l3-6 3.5 2.5L15 20M9 14l-1-4.5 4 1.5 2 2.5" stroke="#2d8abd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>วิ่งล่าสุด</b><span>วันนี้ 41 นาที · 146 bpm</span></div>
+        <div class="end">4.07 <em>km</em></div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: ประวัติ -->
+  <div class="screen hidden" data-tab="history">
+    <div class="apphead"><div><h2>ประวัติ</h2><div class="sub">การซิงก์และความครอบคลุมข้อมูล</div></div></div>
+
+    <div class="card">
+      <div class="label">สถานะล่าสุด</div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-top:9px">
+        <div style="font-size:26px;font-weight:700;letter-spacing:-.02em">สำเร็จ</div>
+        <div style="font-size:13px;color:var(--muted)">09:38 · 3 นาทีที่แล้ว</div>
+      </div>
+      <div class="bar"><b style="width:100%"></b></div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--muted)">
+        <span>1,284 samples</span><span>2 workouts</span><span>3 วัน</span>
+      </div>
+      <button class="primary">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 11-2.6-5.9M20 4v4h-4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        ซิงก์เดี๋ยวนี้
+      </button>
+    </div>
+
+    <h3 class="sec">ไทม์ไลน์</h3>
+    <div class="card">
+      <div class="tl">
+        <div class="ev"><b>ซิงก์อัตโนมัติ</b><time>09:38</time><p>1,284 samples · 2 workouts · 3 วัน · 0.9 วิ</p></div>
+        <div class="ev"><b>ซิงก์อัตโนมัติ</b><time>08:12</time><p>642 samples · 3 วัน</p></div>
+        <div class="ev warn"><b>ข้าม 4 metric</b><time>08:12</time><p>height, waistCircumference, bodyTemperature, lowCardioFitnessEvent — ยังไม่ได้สิทธิ์อ่าน · <u>ขอสิทธิ์</u></p></div>
+        <div class="ev"><b>อัปเดต catalog</b><time>08:12</time><p>เวอร์ชัน 3b39be042e4c · 36 metric · 6 category</p></div>
+        <div class="ev"><b>ดึงประวัติย้อนหลัง</b><time>เมื่อวาน 21:04</time><p>vo2Max และ heartRateRecoveryOneMinute · 2567–2569 · 148 samples</p></div>
+        <div class="ev"><b>ดึงข้อมูลรายรอบวิ่ง</b><time>เมื่อวาน 21:02</time><p>28 รอบ · 17,412 samples (HR + pace)</p></div>
+      </div>
+    </div>
+
+    <h3 class="sec">ความครอบคลุม <span class="hint">เก็บไว้ 2 ปี</span></h3>
+    <div class="card">
+      <div class="row"><div class="txt"><b>heartRate (raw)</b><span>16 ต.ค. 2569 – วันนี้</span></div><div class="end">8 <em>วัน</em></div></div>
+      <div class="row"><div class="txt"><b>น้ำหนัก / องค์ประกอบร่างกาย</b><span>2 ปีเต็ม</span></div><div class="end">8 <em>ครั้ง</em></div></div>
+      <div class="row"><div class="txt"><b>สรุปรายวัน</b><span>730 วัน</span></div><div class="end">118 <em>วันมีข้อมูล</em></div></div>
+      <div class="row"><div class="txt"><b>การออกกำลังกาย</b><span>2 ปี</span></div><div class="end">28 <em>รอบ</em></div></div>
+    </div>
+
+    <h3 class="sec">ออกกำลังกายล่าสุด</h3>
+    <div class="card">
+      <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="5.5" r="2" stroke="#2d8abd" stroke-width="1.8"/><path d="M6 20l3-6 3.5 2.5L15 20" stroke="#2d8abd" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="txt"><b>วิ่ง · 4.07 km</b><span>วันนี้ 06:12 · 146 bpm · 25.7°C</span></div><div class="end">41 <em>นาที</em></div></div>
+      <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="5.5" r="2" stroke="#2d8abd" stroke-width="1.8"/><path d="M6 20l3-6 3.5 2.5L15 20" stroke="#2d8abd" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="txt"><b>วิ่ง · 5.01 km</b><span>22 ต.ค. · 151 bpm · 25.7°C</span></div><div class="end">50 <em>นาที</em></div></div>
+    </div>
+  </div>
+
+  <!-- TAB: ตั้งค่า -->
+  <div class="screen hidden" data-tab="settings">
+    <div class="apphead"><div><h2>ตั้งค่า</h2><div class="sub">เชื่อมต่อ · ข้อมูล · การล้างข้อมูล</div></div></div>
+
+    <div class="card">
+      <div class="label">การเชื่อมต่อ</div>
+      <div class="row" style="margin-top:6px">
+        <div class="ic" style="background:#e9f7ef"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#1f9d55" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>เชื่อมต่อแล้วในชื่อ me</b><span>proxy-health-api · asia-southeast1</span></div>
+      </div>
+      <div class="row"><div class="txt"><b>API token</b><span>••••7820 · 48 ตัวอักษร</span></div><div class="end">เปลี่ยน</div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="row"><div class="txt"><b>Connector ที่เชื่อมอยู่</b><span>Claude · เชื่อมเมื่อ 23 ต.ค.</span></div><div class="end">1 <em>เครื่อง</em></div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+    </div>
+
+    <h3 class="sec">ข้อมูล</h3>
+    <div class="card">
+      <div class="label">เก็บข้อมูลย้อนหลัง</div>
+      <div class="seg" style="margin-top:10px"><span>1 ปี</span><span class="on">2 ปี</span><span>5 ปี</span><span>ทั้งหมด</span></div>
+      <p style="margin:10px 2px 0;font-size:12.5px;color:var(--muted);line-height:1.5">
+        ข้อมูลที่เก่ากว่า 2 ปีจะถูกลบออกจาก Firestore อัตโนมัติ สรุปรายวันยังเก็บต่อเพราะเล็กมาก
+      </p>
+    </div>
+    <div class="card">
+      <div class="row"><div class="txt"><b>ซิงก์อัตโนมัติเบื้องหลัง</b><span>เมื่อ Apple Health มีข้อมูลใหม่</span></div><div class="toggle"></div></div>
+      <div class="row"><div class="txt"><b>ซิงก์เฉพาะตอนชาร์จ</b><span>ลดการใช้แบตเตอรี่</span></div><div class="toggle off"></div></div>
+    </div>
+
+    <h3 class="sec">นาน ๆ ทำที</h3>
+    <div class="card">
+      <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 11-2.6-5.9M20 4v4h-4" stroke="#2d8abd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>ซิงก์ใหม่ทั้งหมด</b><span>ลืม anchor แล้วดึงใหม่ตามนโยบาย backfill</span></div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 12l-4-4m4 4l4-4M4 20h16" stroke="#2d8abd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>ขอสิทธิ์ Health ที่ยังขาด</b><span>4 metric รอสิทธิ์อยู่</span></div><div class="end">4</div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="row danger"><div class="ic" style="background:#fdeceb"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13" stroke="#d0352b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>ลบข้อมูลทั้งหมดบนเซิร์ฟเวอร์</b><span>ลบทุก sample ของ me · กู้คืนไม่ได้</span></div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+    </div>
+
+    <h3 class="sec">เกี่ยวกับ</h3>
+    <div class="card">
+      <div class="row"><div class="txt"><b>Catalog</b><span>ดึงจากเซิร์ฟเวอร์ · 36 metric</span></div><div class="end">3b39be <em>24 ต.ค.</em></div></div>
+      <div class="row"><div class="txt"><b>เวอร์ชันแอป</b><span>build 12</span></div><div class="end">1.1.0</div></div>
+    </div>
+  </div>
+
+  <nav class="tabbar">
+    <div class="tab on" data-go="latest">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 11.5L12 5l8 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 10.5V19h11v-8.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      ล่าสุด</div>
+    <div class="tab" data-go="history">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      ประวัติ</div>
+    <div class="tab" data-go="settings">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 3v2.5M12 18.5V21M21 12h-2.5M5.5 12H3M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8M18.4 18.4l-1.8-1.8M7.4 7.4L5.6 5.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      ตั้งค่า</div>
+  </nav>
+  <div class="homebar"></div>
+</div>
+<div class="caption">แท็บ 1 — ล่าสุด</div>
+</div>
+</div>
+
+<script>
+  // Clone the phone twice so the three tabs can be seen side by side, then set each one's tab.
+  const stage = document.querySelector('.stage');
+  const first = document.querySelector('.phone-wrap');
+  const captions = ['แท็บ 2 — ประวัติ', 'แท็บ 3 — ตั้งค่า'];
+  ['history', 'settings'].forEach((tab, i) => {
+    const clone = first.cloneNode(true);
+    clone.querySelector('.caption').textContent = captions[i];
+    stage.appendChild(clone);
+    show(clone, tab);
+  });
+
+  function show(wrap, tab) {
+    wrap.querySelectorAll('.screen').forEach(s => s.classList.toggle('hidden', s.dataset.tab !== tab));
+    wrap.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.go === tab));
+  }
+  document.addEventListener('click', e => {
+    const tab = e.target.closest('.tab');
+    if (tab) show(tab.closest('.phone-wrap'), tab.dataset.go);
+  });
+</script>
+</body>
+</html>

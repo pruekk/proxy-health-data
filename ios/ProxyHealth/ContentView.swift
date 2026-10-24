@@ -1,139 +1,89 @@
 import SwiftUI
 
+/// Three tabs under a floating bar: where things stand, what the app has been doing, and the
+/// settings you touch once in a while.
 struct ContentView: View {
     @Environment(AppModel.self) private var model
-    @State private var showSettings = false
+    @State private var dashboard = Dashboard()
+    @State private var tab: AppTab = .latest
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Apple Health") {
-                    if model.isAuthorized {
-                        Label("Access requested", systemImage: "heart.text.square.fill")
-                            .foregroundStyle(.pink)
-                    }
-                    Button(model.isAuthorized ? "Review Health access" : "Connect Apple Health") {
-                        Task { await model.requestAuthorization() }
-                    }
-                }
-
-                Section("Server") {
-                    LabeledContent("URL", value: model.settings.serverURL)
-                    LabeledContent("Token", value: model.settings.tokenHint)
-                    if let connection = model.connection {
-                        Text(connection).font(.footnote).foregroundStyle(.secondary)
-                    }
-                    Button("Test connection") { Task { await model.testConnection() } }
-                }
-
-                Section("Sync") {
-                    Button {
-                        Task { await model.syncNow() }
-                    } label: {
-                        HStack {
-                            Text(model.isSyncing ? "Syncing…" : "Sync now")
-                            Spacer()
-                            if model.isSyncing { ProgressView() }
-                        }
-                    }
-                    .disabled(model.isSyncing || !model.isAuthorized || !model.settings.isConfigured)
-
-                    if let date = model.lastSyncAt {
-                        LabeledContent("Last sync", value: date.formatted(date: .abbreviated, time: .shortened))
-                    }
-                    if let report = model.lastReport {
-                        LabeledContent("Samples", value: "\(report.samples)")
-                        LabeledContent("Workouts", value: "\(report.workouts)")
-                        LabeledContent("Days summarised", value: "\(report.days)")
-                        if !report.errors.isEmpty {
-                            LabeledContent("Warnings", value: "\(report.errors.count)")
-                        }
-                    }
-                    if let error = model.errorMessage {
-                        Text(error).font(.footnote).foregroundStyle(.red)
-                    }
-                }
-
-                if !model.log.isEmpty {
-                    Section("Activity") {
-                        ForEach(Array(model.log.enumerated()), id: \.offset) { _, line in
-                            Text(line).font(.caption.monospaced())
-                        }
-                    }
+        ZStack(alignment: .bottom) {
+            Group {
+                switch tab {
+                case .latest: LatestView()
+                case .history: HistoryView()
+                case .settings: SettingsTabView()
                 }
             }
-            .navigationTitle("Proxy Health")
-            // Shows "Connected as <uid>" without a tap, so a token pasted for the wrong user is
-            // obvious before any data is uploaded.
-            .task {
-                guard model.settings.isConfigured, model.connection == nil else { return }
-                await model.testConnection()
-            }
-            .toolbar {
-                Button("Settings", systemImage: "gearshape") { showSettings = true }
-            }
-            .sheet(isPresented: $showSettings) {
-                SettingsView(settings: model.settings)
+            .environment(dashboard)
+
+            FloatingTabBar(selection: $tab).padding(.bottom, 6)
+        }
+        .background(Brand.ground)
+        .overlay(alignment: .top) {
+            if let error = model.errorMessage {
+                Text(error)
+                    .font(.system(size: 12.5))
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .background(.red.opacity(0.9), in: Capsule())
+                    .foregroundStyle(.white)
+                    .padding(.top, 4)
+                    .onTapGesture { model.errorMessage = nil }
             }
         }
     }
 }
 
-struct SettingsView: View {
+/// Server URL, token and backfill windows — the things set once when connecting.
+struct ConnectionSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State var settings: SyncSettings
-    @State private var confirmReset = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     TextField(SyncSettings.defaultServerURL, text: $settings.serverURL)
-                        .textContentType(.URL)
-                        .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .keyboardType(.URL)
                     SecureField("API token", text: $settings.token)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
-                    Text("Server")
+                    Text("เซิร์ฟเวอร์")
                 } footer: {
-                    Text("Token must match an entry in the server's API_TOKENS.")
+                    Text("วางค่าจาก API_TOKENS ได้ทั้งแบบเต็ม (token:me) หรือเฉพาะโทเคน")
+                }
+
+                Section("ดึงย้อนหลังครั้งแรก") {
+                    Stepper("ตัวอย่างดิบ: \(settings.sampleBackfillDays) วัน",
+                            value: $settings.sampleBackfillDays, in: 1...365)
+                    Stepper("สรุปรายวันและ workout: \(settings.dailyBackfillDays) วัน",
+                            value: $settings.dailyBackfillDays, in: 7...1825, step: 30)
                 }
 
                 Section {
-                    Stepper("Raw samples: \(settings.sampleBackfillDays) days", value: $settings.sampleBackfillDays, in: 1...365)
-                    Stepper("Daily summaries & workouts: \(settings.dailyBackfillDays) days", value: $settings.dailyBackfillDays, in: 7...1825, step: 30)
-                } header: {
-                    Text("First-sync history")
-                } footer: {
-                    Text("Raw heart-rate history is large; longer windows mean more Firestore writes.")
-                }
-
-                Section {
-                    Button("Re-sync everything", role: .destructive) { confirmReset = true }
+                    Button("ทดสอบการเชื่อมต่อ") { Task { await model.testConnection() } }
+                    if let connection = model.connection {
+                        Text(connection).font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("การเชื่อมต่อ")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("ยกเลิก") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button("บันทึก") {
                         model.saveSettings(settings)
+                        Task { await model.testConnection() }
                         dismiss()
                     }
                 }
             }
-            .confirmationDialog("Forget sync progress and upload the history window again?", isPresented: $confirmReset, titleVisibility: .visible) {
-                Button("Re-sync", role: .destructive) { model.resetSync() }
-            }
         }
     }
-}
-
-#Preview {
-    ContentView().environment(AppModel())
 }

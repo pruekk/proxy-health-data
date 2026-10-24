@@ -79,6 +79,24 @@ async function issueTokens(uid: string, clientId: string) {
   return { access_token: access, token_type: 'Bearer', expires_in: ACCESS_TTL_S, refresh_token: refresh, scope: SCOPE }
 }
 
+/** Connectors currently signed in for a user, for the settings screen. */
+export async function listUserConnectors(uid: string) {
+  const snap = await tokens.where('uid', '==', uid).where('kind', '==', 'access').get()
+  const byClient = new Map<string, { clientId: string; clientName: string; since: string; expiresAt: string }>()
+  for (const doc of snap.docs) {
+    const clientId = str(doc.get('clientId'))
+    if (byClient.has(clientId)) continue
+    const client = await clients.doc(clientId).get()
+    byClient.set(clientId, {
+      clientId,
+      clientName: str(client.get('clientName')) || 'MCP client',
+      since: (doc.get('createdAt') as Timestamp | undefined)?.toDate().toISOString() ?? '',
+      expiresAt: (doc.get('expiresAt') as Timestamp | undefined)?.toDate().toISOString() ?? '',
+    })
+  }
+  return [...byClient.values()]
+}
+
 // Drops every OAuth token a user holds — the "sign this person out everywhere" switch.
 export async function revokeUserTokens(uid: string): Promise<number> {
   const snap = await tokens.where('uid', '==', uid).get()

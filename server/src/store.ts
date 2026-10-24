@@ -1,6 +1,15 @@
 import { FieldPath, FieldValue, Timestamp, type DocumentData, type WriteBatch } from 'firebase-admin/firestore'
 import { db } from './firebase'
-import type { ActivitySummaryInput, DailyStatInput, SampleInput, SyncBody, WorkoutInput } from './schemas'
+import type {
+  ActivitySummaryInput,
+  DailyStatInput,
+  HourlyStatInput,
+  SampleInput,
+  SyncBody,
+  SyncLogInput,
+  WorkoutInput,
+} from './schemas'
+import { catalog } from './catalog'
 
 // Firestore layout
 //   users/{uid}                                  profile: timeZone, lastSyncAt
@@ -10,12 +19,19 @@ import type { ActivitySummaryInput, DailyStatInput, SampleInput, SyncBody, Worko
 //   users/{uid}/daily/{yyyy-MM-dd}               per-day aggregates (metrics.*) + activity rings (activity)
 
 const BATCH_LIMIT = 450
+/** Years of raw samples kept when the user has not chosen otherwise. */
+export const DEFAULT_RETENTION_YEARS = 2
 
 const userRef = (uid: string) => db.collection('users').doc(uid)
 const metricsCol = (uid: string) => userRef(uid).collection('metrics')
 const samplesCol = (uid: string, type: string) => metricsCol(uid).doc(type).collection('samples')
 const workoutsCol = (uid: string) => userRef(uid).collection('workouts')
 const dailyCol = (uid: string) => userRef(uid).collection('daily')
+const hourlyCol = (uid: string) => userRef(uid).collection('hourly')
+const syncsCol = (uid: string) => userRef(uid).collection('syncs')
+
+/** Metrics whose raw samples only live for a few days unless recorded during a workout. */
+const SHORT_RETENTION = new Set(catalog.quantities.filter((q) => q.retention === 'short').map((q) => q.key))
 
 type Op = (batch: WriteBatch) => void
 
@@ -37,8 +53,27 @@ function toTimestamp(iso: string): Timestamp {
 
 // ---------- writes ----------
 
-function sampleDoc(s: SampleInput): DocumentData {
+// Expiry is measured from the sample's own date, so "one year" means a year of history rather
+// than a year from upload. A Firestore TTL policy on the `expiresAt` field does the deleting;
+// nothing here runs on a schedule.
+//
+// High-frequency metrics (hundreds of samples a day) only keep a short raw window — the hourly
+// and daily aggregates carry the long view. Samples recorded during a workout are exempt, so a
+// run stays reviewable for as long as the workout itself.
+export function sampleExpiry(s: SampleInput, retentionYears: number): Timestamp | undefined {
+  if (retentionYears <= 0) return undefined
+  const short = SHORT_RETENTION.has(s.type) && s.context !== 'workout'
+  const days = short ? catalog.sync.shortRetentionDays : retentionYears * 365.25
+  return Timestamp.fromMillis(new Date(s.startDate).getTime() + days * 86_400_000)
+}
+
+const retentionExpiry = (retentionYears: number, from: Date) =>
+  retentionYears > 0 ? Timestamp.fromMillis(from.getTime() + retentionYears * 365.25 * 86_400_000) : undefined
+
+function sampleDoc(s: SampleInput, retentionYears: number): DocumentData {
   return {
+    expiresAt: sampleExpiry(s, retentionYears),
+    context: s.context,
     kind: s.kind,
     value: s.value,
     unit: s.unit,
@@ -52,9 +87,27 @@ function sampleDoc(s: SampleInput): DocumentData {
   }
 }
 
-function workoutDoc(w: WorkoutInput): DocumentData {
+function workoutDoc(w: WorkoutInput, retentionYears: number): DocumentData {
   const { id, startDate, endDate, ...rest } = w
-  return { ...rest, startDate: toTimestamp(startDate), endDate: toTimestamp(endDate) }
+  return {
+    ...rest,
+    startDate: toTimestamp(startDate),
+    endDate: toTimestamp(endDate),
+    expiresAt: retentionExpiry(retentionYears, new Date(startDate)),
+  }
+}
+
+// One document per day holding every metric's 24 hourly slots: 365 documents a year rather
+// than tens of thousands, and a month of intraday shape comes back in a single query.
+function hourlyDocs(stats: HourlyStatInput[]): Map<string, DocumentData> {
+  const days = new Map<string, DocumentData>()
+  for (const { date, hour, type, ...values } of stats) {
+    let doc = days.get(date)
+    if (!doc) days.set(date, (doc = { date, metrics: {} }))
+    doc.metrics[type] ??= {}
+    doc.metrics[type][hour] = values
+  }
+  return days
 }
 
 function dailyDocs(stats: DailyStatInput[], rings: ActivitySummaryInput[]): Map<string, DocumentData> {
@@ -69,27 +122,41 @@ function dailyDocs(stats: DailyStatInput[], rings: ActivitySummaryInput[]): Map<
   return days
 }
 
+export async function getRetentionYears(uid: string): Promise<number> {
+  const snap = await userRef(uid).get()
+  const value = snap.get('retentionYears')
+  return typeof value === 'number' ? value : DEFAULT_RETENTION_YEARS
+}
+
+export async function setRetentionYears(uid: string, years: number) {
+  await userRef(uid).set({ retentionYears: years }, { merge: true })
+}
+
 export async function ingest(uid: string, body: SyncBody) {
   const now = FieldValue.serverTimestamp()
+  const retentionYears = await getRetentionYears(uid)
   const ops: Op[] = []
   // Per type: the newest sample and a count per recording source, both denormalised onto the
   // metric document below so reads never fan out one query per metric.
   const touchedMetrics = new Map<
     string,
-    { kind: string; unit?: string; newest?: SampleInput; sources: Map<string, number> }
+    { kind: string; unit?: string; newest?: SampleInput; oldest?: string; count: number; sources: Map<string, number> }
   >()
 
   for (const s of body.samples ?? []) {
-    const doc = sampleDoc(s)
+    const doc = sampleDoc(s, retentionYears)
     ops.push((b) => b.set(samplesCol(uid, s.type).doc(s.id), doc))
     const entry = touchedMetrics.get(s.type) ?? {
       kind: s.kind,
       unit: s.unit,
+      count: 0,
       sources: new Map<string, number>(),
     }
     entry.kind = s.kind
     entry.unit = s.unit ?? entry.unit
     if (!entry.newest || s.startDate > entry.newest.startDate) entry.newest = s
+    if (!entry.oldest || s.startDate < entry.oldest) entry.oldest = s.startDate
+    entry.count += 1
     const source = s.sourceName ?? 'unknown'
     entry.sources.set(source, (entry.sources.get(source) ?? 0) + 1)
     touchedMetrics.set(s.type, entry)
@@ -97,8 +164,25 @@ export async function ingest(uid: string, body: SyncBody) {
   for (const { type, ids } of body.deletedSamples ?? []) {
     for (const id of ids) ops.push((b) => b.delete(samplesCol(uid, type).doc(id)))
   }
-  for (const [type, { kind, unit, newest, sources }] of touchedMetrics) {
-    const doc: DocumentData = { type, kind, unit, lastSyncAt: now }
+  // `firstAt` may only move backwards — a backfill delivers older samples than anything stored,
+  // while a routine sync must not push it forward. That needs the current values, so the metric
+  // documents are read once up front.
+  const storedFirstAt = new Map<string, Timestamp>()
+  if (touchedMetrics.size) {
+    const existing = await metricsCol(uid).get()
+    for (const doc of existing.docs) {
+      const at = doc.get('firstAt')
+      if (at instanceof Timestamp) storedFirstAt.set(doc.id, at)
+    }
+  }
+
+  for (const [type, { kind, unit, newest, oldest, count, sources }] of touchedMetrics) {
+    const doc: DocumentData = { type, kind, unit, lastSyncAt: now, sampleCount: FieldValue.increment(count) }
+    if (oldest) {
+      const candidate = Timestamp.fromDate(new Date(oldest))
+      const stored = storedFirstAt.get(type)
+      if (!stored || candidate.toMillis() < stored.toMillis()) doc.firstAt = candidate
+    }
     if (newest) {
       // Nested maps, not dotted keys: `set` with merge treats a dotted key as a literal field
       // name, while a nested map merges field by field and keeps increments working.
@@ -115,15 +199,23 @@ export async function ingest(uid: string, body: SyncBody) {
     ops.push((b) => b.set(metricsCol(uid).doc(type), doc, { merge: true }))
   }
 
+
   for (const w of body.workouts ?? []) {
-    const doc = workoutDoc(w)
+    const doc = workoutDoc(w, retentionYears)
     ops.push((b) => b.set(workoutsCol(uid).doc(w.id), doc))
   }
   for (const id of body.deletedWorkoutIds ?? []) ops.push((b) => b.delete(workoutsCol(uid).doc(id)))
 
   const days = dailyDocs(body.dailyStats ?? [], body.activitySummaries ?? [])
   for (const [date, doc] of days) {
-    ops.push((b) => b.set(dailyCol(uid).doc(date), { ...doc, updatedAt: now }, { merge: true }))
+    const expiresAt = retentionExpiry(retentionYears, new Date(`${date}T00:00:00Z`))
+    ops.push((b) => b.set(dailyCol(uid).doc(date), { ...doc, expiresAt, updatedAt: now }, { merge: true }))
+  }
+
+  const hours = hourlyDocs(body.hourlyStats ?? [])
+  for (const [date, doc] of hours) {
+    const expiresAt = retentionExpiry(retentionYears, new Date(`${date}T00:00:00Z`))
+    ops.push((b) => b.set(hourlyCol(uid).doc(date), { ...doc, expiresAt, updatedAt: now }, { merge: true }))
   }
 
   ops.push((b) => b.set(userRef(uid), { timeZone: body.timeZone, ...body.profile, lastSyncAt: now }, { merge: true }))
@@ -135,7 +227,59 @@ export async function ingest(uid: string, body: SyncBody) {
     workouts: body.workouts?.length ?? 0,
     deletedWorkouts: body.deletedWorkoutIds?.length ?? 0,
     days: days.size,
+    hours: hours.size,
   }
+}
+
+// ---------- sync history ----------
+
+/** Keeps the log on the server so it survives a reinstall and the MCP tools can read it. */
+export async function recordSync(uid: string, entry: SyncLogInput) {
+  const startedAt = toTimestamp(entry.startedAt)
+  await syncsCol(uid).doc(entry.startedAt).set({
+    ...entry,
+    // A real timestamp field to sort on: ordering by document id descending is a key scan,
+    // which Firestore rejects, and `limitToLast` compiles down to exactly that.
+    startedAtTime: startedAt,
+    expiresAt: Timestamp.fromMillis(Date.now() + 90 * 86_400_000),
+    recordedAt: FieldValue.serverTimestamp(),
+  })
+}
+
+export async function listSyncs(uid: string, limit = 50) {
+  const snap = await syncsCol(uid).orderBy('startedAtTime', 'desc').limit(limit).get()
+  return snap.docs.map((d) => {
+    const { startedAtTime, ...rest } = plain(d.data())
+    return rest
+  })
+}
+
+// ---------- hourly reads ----------
+
+export async function queryHourly(uid: string, fromDate: string, toDate: string, metrics?: string[]) {
+  const snap = await hourlyCol(uid)
+    .where(FieldPath.documentId(), '>=', fromDate)
+    .where(FieldPath.documentId(), '<=', toDate)
+    .orderBy(FieldPath.documentId(), 'asc')
+    .get()
+  return snap.docs.map((d) => {
+    const day = plain(d.data())
+    if (metrics?.length && day.metrics) {
+      day.metrics = Object.fromEntries(Object.entries(day.metrics).filter(([k]) => metrics.includes(k)))
+    }
+    return day
+  })
+}
+
+// ---------- destructive ----------
+
+/** Deletes every health document for a user, leaving the profile and OAuth state alone. */
+export async function deleteAllData(uid: string) {
+  const writer = db.bulkWriter()
+  for (const col of [metricsCol(uid), workoutsCol(uid), dailyCol(uid), hourlyCol(uid), syncsCol(uid)]) {
+    await db.recursiveDelete(col, writer)
+  }
+  await writer.close()
 }
 
 // ---------- reads ----------

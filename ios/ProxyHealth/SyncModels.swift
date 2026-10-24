@@ -49,6 +49,9 @@ enum MetaValue: Codable, Sendable {
 struct SamplePayload: Codable, Sendable {
     var id: String
     var type: String
+    /// "workout" for samples pulled by the per-workout backfill: the server keeps those for the
+    /// full retention even when the metric is on the short raw window.
+    var context: String?
     var kind: String
     var value: Double
     var unit: String?
@@ -89,6 +92,19 @@ struct WorkoutPayload: Codable, Sendable {
     var metadata: [String: MetaValue]?
 }
 
+/// One hour's aggregate, computed on-device with the same statistics query as the daily stats,
+/// so iPhone/Watch/third-party overlap is already resolved.
+struct HourlyStatPayload: Codable, Sendable {
+    var date: String
+    var hour: Int
+    var type: String
+    var unit: String
+    var sum: Double?
+    var avg: Double?
+    var min: Double?
+    var max: Double?
+}
+
 struct DailyStatPayload: Codable, Sendable {
     var date: String
     var type: String
@@ -126,6 +142,7 @@ struct SyncRequest: Codable, Sendable {
     var workouts: [WorkoutPayload]?
     var deletedWorkoutIds: [String]?
     var dailyStats: [DailyStatPayload]?
+    var hourlyStats: [HourlyStatPayload]?
     var activitySummaries: [ActivitySummaryPayload]?
 }
 
@@ -139,6 +156,19 @@ struct SyncResponse: Codable, Sendable {
     }
     var ok: Bool
     var written: Written
+}
+
+/// What one sync did, reported to the server so the history survives a reinstall.
+struct SyncLogPayload: Codable, Sendable {
+    var startedAt: Date
+    var durationMs: Double
+    var trigger: String
+    var samples: Int
+    var deletedSamples: Int?
+    var workouts: Int
+    var days: Int
+    var catalogVersion: String?
+    var errors: [String]?
 }
 
 struct Profile: Codable, Sendable {

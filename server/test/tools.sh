@@ -50,7 +50,7 @@ check "dateOfBirth stored" "1990-05-15" "$(echo "$ME" | python3 -c 'import sys,j
 check "biologicalSex stored" "male" "$(echo "$ME" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("biologicalSex"))')"
 
 echo "2. tools/list"
-check "tool count" "10" "$(curl -s -X POST $B/mcp -H "$AUTH" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
+check "tool count" "11" "$(curl -s -X POST $B/mcp -H "$AUTH" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
 
 echo "3. get_latest_values"
 LV=$(call get_latest_values '{"types":["bodyMass","height","vo2Max"]}')
@@ -110,6 +110,44 @@ check "stale version -> 200" "200" "$(curl -s -o /dev/null -w '%{http_code}' "$B
 echo "10. denormalised metric reads"
 check "latest from metric doc" "76.65" "$(call get_latest_values '{"types":["bodyMass"]}' | python3 -c 'import sys,json;print([v["value"] for v in json.load(sys.stdin)["values"] if v["type"]=="bodyMass"][0])')"
 check "sources counted at ingest" "Withings" "$(call list_metrics '{"withSources":true}' | python3 -c 'import sys,json;m=[x for x in json.load(sys.stdin)["metrics"] if x["type"]=="bodyMass"][0];print(m["sources"][0]["source"])')"
+
+echo "11. retention tiers"
+python3 - "$B" "$TOKEN" <<'PY2'
+import json, sys, urllib.request
+from datetime import datetime, timedelta, timezone
+base, token = sys.argv[1], sys.argv[2]
+def post(path, payload):
+    req = urllib.request.Request(base + path, data=json.dumps(payload).encode(),
+        headers={"content-type": "application/json", "authorization": "Bearer " + token})
+    return json.load(urllib.request.urlopen(req))
+now = datetime.now(timezone.utc)
+post("/v1/sync", {"samples": [
+    # high-frequency, no workout context -> short window
+    {"id": "ret-hr-0001-0000-0000-000000000000", "type": "heartRate", "kind": "quantity", "value": 70,
+     "unit": "count/min", "startDate": now.isoformat(), "endDate": now.isoformat()},
+    # same metric, recorded during a workout -> full retention
+    {"id": "ret-hr-0002-0000-0000-000000000000", "type": "heartRate", "kind": "quantity", "value": 150,
+     "unit": "count/min", "startDate": now.isoformat(), "endDate": now.isoformat(), "context": "workout"},
+    # low-frequency -> full retention
+    {"id": "ret-bm-0001-0000-0000-000000000000", "type": "bodyMass", "kind": "quantity", "value": 75,
+     "unit": "kg", "startDate": now.isoformat(), "endDate": now.isoformat()},
+]})
+post("/v1/sync", {"hourlyStats": [
+    {"date": now.strftime("%Y-%m-%d"), "hour": 7, "type": "stepCount", "unit": "count", "sum": 820},
+    {"date": now.strftime("%Y-%m-%d"), "hour": 8, "type": "stepCount", "unit": "count", "sum": 1500},
+]})
+print("  seeded retention + hourly fixtures")
+PY2
+check "hourly tool returns buckets" "1500" "$(call get_hourly_pattern '{}' | python3 -c 'import sys,json;d=json.load(sys.stdin)["days"];print(round(d[-1]["metrics"]["stepCount"]["8"]["sum"]))')"
+check "hourly keeps 24 slots per metric" "2" "$(call get_hourly_pattern '{}' | python3 -c 'import sys,json;d=json.load(sys.stdin)["days"];print(len(d[-1]["metrics"]["stepCount"]))')"
+
+echo "12. settings, history and delete"
+check "default retention" "1" "$(curl -s $B/v1/settings -H "$AUTH" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["retentionYears"] in (1,2) else 0)')"
+check "retention can be set" "5" "$(curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retentionYears":5}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["retentionYears"])')"
+check "retention rejects nonsense" "422" "$(curl -s -o /dev/null -w '%{http_code}' -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retentionYears":999}')"
+curl -s -X POST $B/v1/syncs -H "$AUTH" -H 'content-type: application/json' -d '{"startedAt":"2026-10-24T03:00:00.000Z","durationMs":910,"trigger":"background","samples":120,"workouts":1,"days":2}' > /dev/null
+check "sync log stored" "120" "$(curl -s $B/v1/syncs -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["samples"])')"
+check "connectors listed" "0" "$(curl -s $B/v1/connectors -H "$AUTH" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)))')"
 
 echo
 echo "passed: $pass  failed: $fail"

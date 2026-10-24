@@ -10,6 +10,7 @@ import {
   latestDailyValues,
   listMetrics,
   queryDaily,
+  queryHourly,
   querySamples,
   querySleep,
   queryWorkouts,
@@ -171,6 +172,25 @@ const tools: Tool[] = [
         }
       }
       return { ...keys, fields, days }
+    },
+  },
+  {
+    name: 'get_hourly_pattern',
+    title: 'Hourly pattern',
+    description:
+      'Per-hour values for a metric across a date range — the shape of the day. Use for "when do I move", "what time does my heart rate settle", or comparing one week against another. Covers a far longer span than get_samples because the buckets are pre-aggregated on the phone (and de-duplicated across iPhone, Watch and other sources). Available for stepCount, heartRate, activeEnergyBurned and distanceWalkingRunning.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...dayRange,
+        metrics: { type: 'array', items: { type: 'string' }, description: 'Metric keys. Omit for all hourly metrics.' },
+      },
+    },
+    run: async (uid, args) => {
+      const keys = parseDateKeys(str(args.from), str(args.to), 7, await timeZoneOf(uid))
+      const metrics = Array.isArray(args.metrics) ? args.metrics.map(String) : undefined
+      const days = await queryHourly(uid, keys.from, keys.to, metrics)
+      return { ...keys, note: 'metrics.{type}.{hour 0-23} holds sum for cumulative metrics, avg/min/max for discrete ones. Hours are the user\'s local time.', days }
     },
   },
   {

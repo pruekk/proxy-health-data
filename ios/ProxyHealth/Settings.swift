@@ -78,6 +78,9 @@ enum SyncState {
     private static let dailyBackfillDoneKey = "sync.dailyBackfillDone"
     private static let lastSyncKey = "sync.lastSyncAt"
     private static let lastProfileKey = "sync.lastProfile"
+    private static let recentSyncsKey = "sync.recent"
+    private static let backgroundKey = "sync.backgroundDelivery"
+    private static let chargingKey = "sync.onlyWhileCharging"
 
     static func anchor(for key: String) -> HKQueryAnchor? {
         guard let data = defaults.data(forKey: "anchor.\(key)") else { return nil }
@@ -126,6 +129,30 @@ enum SyncState {
 
     static func markWorkoutDetailDone(_ id: String) {
         defaults.set(true, forKey: "workoutDetail.\(id)")
+    }
+
+    /// The last few sync reports, kept on the device so the history tab has something to show
+    /// before the server responds (and when it cannot be reached).
+    static var recentSyncs: [SyncReport] {
+        guard let data = defaults.data(forKey: recentSyncsKey) else { return [] }
+        return (try? JSONDecoder().decode([SyncReport].self, from: data)) ?? []
+    }
+
+    static func remember(_ report: SyncReport) {
+        let kept = ([report] + recentSyncs).prefix(30)
+        defaults.set(try? JSONEncoder().encode(Array(kept)), forKey: recentSyncsKey)
+    }
+
+    /// Whether HealthKit may wake the app in the background.
+    static var backgroundDeliveryEnabled: Bool {
+        get { defaults.object(forKey: backgroundKey) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: backgroundKey) }
+    }
+
+    /// Skip background syncs unless the phone is on a charger.
+    static var syncOnlyWhileCharging: Bool {
+        get { defaults.bool(forKey: chargingKey) }
+        set { defaults.set(newValue, forKey: chargingKey) }
     }
 
     /// Forget all anchors so the next sync re-uploads everything in the backfill window.

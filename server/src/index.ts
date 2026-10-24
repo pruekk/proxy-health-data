@@ -4,9 +4,25 @@ import { catalog } from './catalog'
 import { parseDateKeys, parseRange } from './dates'
 import { env } from './env'
 import { handleMcp } from './mcp'
-import { oauth, revokeUserTokens } from './oauth'
-import { SyncBody } from './schemas'
-import { BadRequest, getProfile, ingest, listMetrics, queryDaily, querySamples, querySleep, queryWorkouts } from './store'
+import { listUserConnectors, oauth, revokeUserTokens } from './oauth'
+import { SyncBody, SyncLogInput } from './schemas'
+import {
+  BadRequest,
+  DEFAULT_RETENTION_YEARS,
+  deleteAllData,
+  getProfile,
+  getRetentionYears,
+  ingest,
+  listMetrics,
+  listSyncs,
+  queryDaily,
+  queryHourly,
+  querySamples,
+  querySleep,
+  queryWorkouts,
+  recordSync,
+  setRetentionYears,
+} from './store'
 
 const RangeQuery = t.Object({
   from: t.Optional(t.String()),
@@ -64,6 +80,7 @@ export const app = new Elysia()
       }, { query: t.Object({ version: t.Optional(t.String({ maxLength: 64 })) }) })
       // Signs this user's connectors out everywhere. The static API token still works, so the
       // iOS app and Claude Code keep syncing.
+      .get('/connectors', ({ uid }) => listUserConnectors(uid))
       .post('/revoke-connectors', async ({ uid }) => ({ ok: true, revoked: await revokeUserTokens(uid) }))
       .post('/sync', async ({ uid, body }) => ({ ok: true, written: await ingest(uid, body) }), {
         body: SyncBody,
@@ -87,6 +104,44 @@ export const app = new Elysia()
         },
         { query: RangeQuery },
       )
+      .get(
+        '/hourly',
+        async ({ uid, query }) => {
+          const keys = parseDateKeys(query.from, query.to, 3, await timeZoneOf(uid))
+          return queryHourly(uid, keys.from, keys.to)
+        },
+        { query: RangeQuery },
+      )
+
+      // ----- sync history: kept server-side so it survives a reinstall -----
+      .get('/syncs', ({ uid, query }) => listSyncs(uid, query.limit ?? 50), { query: RangeQuery })
+      .post(
+        '/syncs',
+        async ({ uid, body }) => {
+          await recordSync(uid, body)
+          return { ok: true }
+        },
+        { body: SyncLogInput },
+      )
+
+      // ----- settings and housekeeping -----
+      .get('/settings', async ({ uid }) => ({
+        retentionYears: await getRetentionYears(uid),
+        defaultRetentionYears: DEFAULT_RETENTION_YEARS,
+      }))
+      .put(
+        '/settings',
+        async ({ uid, body }) => {
+          await setRetentionYears(uid, body.retentionYears)
+          return { ok: true, retentionYears: body.retentionYears }
+        },
+        { body: t.Object({ retentionYears: t.Integer({ minimum: 1, maximum: 50 }) }) },
+      )
+      // Deletes every health document for this user; profile, token and connectors stay.
+      .delete('/data', async ({ uid }) => {
+        await deleteAllData(uid)
+        return { ok: true }
+      })
       .get(
         '/sleep',
         async ({ uid, query }) => querySleep(uid, parseRange(query.from, query.to, 7), await timeZoneOf(uid)),

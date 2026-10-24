@@ -135,6 +135,15 @@ enum HealthCatalog {
         }
     }
 
+    /// Metrics the server wants hourly buckets for. Driven by the catalog, so the list can
+    /// change without a rebuild.
+    static func isHourly(_ key: String) -> Bool {
+        guard let remote = CatalogStore.cached else {
+            return ["stepCount", "heartRate", "activeEnergyBurned", "distanceWalkingRunning"].contains(key)
+        }
+        return remote.quantities.first { $0.key == key }?.hourly == true
+    }
+
     /// Metrics pulled per workout for after-the-fact review: heart rate and pace.
     static var workoutDetailMetrics: [QuantityMetric] {
         let keys = CatalogStore.cached?.workoutDetailMetrics ?? ["heartRate", "runningSpeed", "cyclingSpeed"]

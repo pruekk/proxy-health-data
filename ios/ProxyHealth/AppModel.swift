@@ -52,19 +52,42 @@ final class AppModel {
         }
     }
 
-    func syncNow() async {
+    var backgroundDeliveryEnabled = SyncState.backgroundDeliveryEnabled
+    var syncOnlyWhileCharging: Bool = SyncState.syncOnlyWhileCharging {
+        didSet { SyncState.syncOnlyWhileCharging = syncOnlyWhileCharging }
+    }
+
+    func setBackgroundDelivery(_ enabled: Bool) {
+        backgroundDeliveryEnabled = enabled
+        SyncState.backgroundDeliveryEnabled = enabled
+        Task {
+            if enabled {
+                await SyncEngine.shared.startBackgroundDelivery()
+                appendLog("เปิดซิงก์เบื้องหลัง")
+            } else {
+                await SyncEngine.shared.stopBackgroundDelivery()
+                appendLog("ปิดซิงก์เบื้องหลัง")
+            }
+        }
+    }
+
+    func syncNow(trigger: SyncTrigger = .manual) async {
         guard !isSyncing else { return }
         isSyncing = true
         errorMessage = nil
         appendLog("Sync started")
         defer { isSyncing = false }
         do {
-            let report = try await SyncEngine.shared.sync { line in
+            let report = try await SyncEngine.shared.sync(trigger: trigger) { line in
                 Task { @MainActor in self.appendLog(line) }
+            }
+            guard !report.skipped else {
+                appendLog("ข้ามการซิงก์ — เพิ่งซิงก์ไปเมื่อครู่")
+                return
             }
             lastReport = report
             lastSyncAt = report.finishedAt
-            appendLog("Sync finished: \(report.samples) samples, \(report.workouts) workouts, \(report.days) days")
+            appendLog("ซิงก์เสร็จ: \(report.samples) samples, \(report.workouts) workouts, \(report.days) วัน")
             report.errors.forEach { appendLog("⚠︎ \($0)") }
         } catch {
             errorMessage = error.localizedDescription

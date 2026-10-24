@@ -1,13 +1,24 @@
 import Foundation
 import HealthKit
+import UIKit
 
-struct SyncReport: Sendable {
+struct SyncReport: Sendable, Codable {
     var samples = 0
     var deletedSamples = 0
     var workouts = 0
     var days = 0
     var errors: [String] = []
+    var startedAt = Date()
     var finishedAt = Date()
+    var trigger: SyncTrigger = .manual
+    var skipped = false
+
+    var durationMs: Double { finishedAt.timeIntervalSince(startedAt) * 1000 }
+}
+
+/// What asked for the sync. Background runs are rate limited; a manual tap never is.
+enum SyncTrigger: String, Sendable, Codable {
+    case manual, foreground, background
 }
 
 enum SyncError: LocalizedError {
@@ -30,10 +41,23 @@ actor SyncEngine {
     let store = HKHealthStore()
     private var current: Task<SyncReport, Error>?
     private var observersStarted = false
+    private var activeObservers: [HKObserverQuery] = []
 
     private static let pageSize = 2000
     private static let uploadChunk = 2000
     /// Workouts examined per sync for the raw-detail backfill, so a first run stays bounded.
+    func shouldSkipBackgroundSync() -> Bool {
+        guard SyncState.syncOnlyWhileCharging else { return false }
+        return !Self.isCharging()
+    }
+
+    private static func isCharging() -> Bool {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        return [.charging, .full].contains(UIDevice.current.batteryState)
+    }
+
+    /// Minimum gap between automatic syncs.
+    private static let cooldownSeconds: TimeInterval = 120
     private static var workoutDetailLimit: Int { CatalogStore.cached?.sync?.workoutDetailLimit ?? 40 }
     private static var recoveryTailSeconds: TimeInterval { CatalogStore.cached?.sync?.recoveryTailSeconds ?? 600 }
 
@@ -48,20 +72,35 @@ actor SyncEngine {
 
     // MARK: Sync
 
-    func sync(progress: @escaping @Sendable (String) -> Void = { _ in }) async throws -> SyncReport {
+    func sync(
+        trigger: SyncTrigger = .manual,
+        progress: @escaping @Sendable (String) -> Void = { _ in }
+    ) async throws -> SyncReport {
         if let current { return try await current.value }
-        let task = Task { try await self.performSync(progress: progress) }
+        // HealthKit can fire several observers at once and a foreground return often lands right
+        // after one; without this the same work runs repeatedly for nothing.
+        if trigger != .manual, let last = SyncState.lastSyncAt, Date().timeIntervalSince(last) < Self.cooldownSeconds {
+            var report = SyncReport()
+            report.trigger = trigger
+            report.skipped = true
+            return report
+        }
+        let task = Task { try await self.performSync(trigger: trigger, progress: progress) }
         current = task
         defer { if current == task { current = nil } }
         return try await task.value
     }
 
-    private func performSync(progress: @escaping @Sendable (String) -> Void) async throws -> SyncReport {
+    private func performSync(
+        trigger: SyncTrigger,
+        progress: @escaping @Sendable (String) -> Void
+    ) async throws -> SyncReport {
         let settings = SyncSettings.load()
         guard let client = APIClient(settings: settings) else { throw SyncError.notConfigured }
         guard HKHealthStore.isHealthDataAvailable() else { throw SyncError.healthDataUnavailable }
 
         var report = SyncReport()
+        report.trigger = trigger
         await refreshCatalog(client: client, progress: progress)
         await syncProfile(client: client, report: &report)
 
@@ -129,6 +168,15 @@ actor SyncEngine {
             report.errors.append("workouts: \(error.localizedDescription)")
         }
 
+        // Hourly buckets for the few metrics where the shape of the day matters. Only the last
+        // few days are recomputed: older hours never change once the samples have landed.
+        do {
+            let hours = try await syncHourly(client: client, report: &report)
+            if hours > 0 { progress("hourly buckets: \(hours) วัน") }
+        } catch {
+            report.errors.append("hourly: \(error.localizedDescription)")
+        }
+
         // Daily aggregates and rings are recomputed for recent days every sync, since the Watch
         // can deliver samples late. The first sync backfills the full window.
         let days = SyncState.dailyBackfillDone ? 3 : settings.dailyBackfillDays
@@ -151,6 +199,21 @@ actor SyncEngine {
 
         report.finishedAt = Date()
         SyncState.lastSyncAt = report.finishedAt
+        SyncState.remember(report)
+        // Best effort: the history is nicer to have than the sync is to fail over.
+        try? await client.recordSync(
+            SyncLogPayload(
+                startedAt: report.startedAt,
+                durationMs: report.durationMs,
+                trigger: trigger.rawValue,
+                samples: report.samples,
+                deletedSamples: report.deletedSamples,
+                workouts: report.workouts,
+                days: report.days,
+                catalogVersion: CatalogStore.cached?.version,
+                errors: report.errors.isEmpty ? nil : Array(report.errors.prefix(40))
+            )
+        )
         return report
     }
 
@@ -184,7 +247,11 @@ actor SyncEngine {
                     sortDescriptors: [],
                     limit: Self.pageSize
                 ).result(for: store)
-                payloads += samples.map { Self.payload($0, metric: metric) }
+                payloads += samples.map { sample in
+                    var payload = Self.payload(sample, metric: metric)
+                    payload.context = "workout"
+                    return payload
+                }
             }
             guard !payloads.isEmpty else {
                 SyncState.markWorkoutDetailDone(workout.uuid.uuidString)
@@ -215,11 +282,11 @@ actor SyncEngine {
 
     /// Requests authorization for read types that have never been requested. iOS only shows the
     /// sheet for undetermined types, so this is a no-op once everything has been decided.
-    func requestNewReadTypes() async {
+    func requestNewReadTypes(force: Bool = false) async {
         let types = HealthCatalog.readTypes
         let identifiers = Set(types.map(\.identifier))
         let pending = identifiers.subtracting(CatalogStore.authorizedTypes)
-        guard !pending.isEmpty else { return }
+        guard force || !pending.isEmpty else { return }
         do {
             try await store.requestAuthorization(toShare: [], read: types)
             CatalogStore.authorizedTypes = identifiers
@@ -276,6 +343,55 @@ actor SyncEngine {
             if result.addedSamples.count + result.deletedObjects.count < Self.pageSize { break }
         }
         return (added, deleted)
+    }
+
+    /// Uploads per-hour statistics for the metrics flagged `hourly` in the catalog. One document
+    /// per day on the server holds all 24 slots, so a year costs 365 documents.
+    private func syncHourly(client: APIClient, report: inout SyncReport) async throws -> Int {
+        let metrics = HealthCatalog.effective.quantities.filter { HealthCatalog.isHourly($0.key) }
+        guard !metrics.isEmpty else { return 0 }
+
+        let calendar = Calendar.current
+        let days = CatalogStore.cached?.sync?.hourlyRecomputeDays ?? 3
+        let end = Date()
+        let start = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -(days - 1), to: end)!)
+
+        var stats: [HourlyStatPayload] = []
+        for metric in metrics {
+            let options: HKStatisticsOptions = metric.aggregation == .cumulative
+                ? .cumulativeSum
+                : [.discreteAverage, .discreteMin, .discreteMax]
+            let query = HKStatisticsCollectionQueryDescriptor(
+                predicate: .quantitySample(type: metric.type, predicate: HKQuery.predicateForSamples(withStart: start, end: end)),
+                options: options,
+                anchorDate: start,
+                intervalComponents: DateComponents(hour: 1)
+            )
+            let unit = metric.unit
+            for s in try await query.result(for: store).statistics() {
+                let sum = s.sumQuantity()?.doubleValue(for: unit)
+                let avg = s.averageQuantity()?.doubleValue(for: unit)
+                guard sum != nil || avg != nil else { continue }
+                stats.append(
+                    HourlyStatPayload(
+                        date: Self.dayKey(s.startDate),
+                        hour: calendar.component(.hour, from: s.startDate),
+                        type: metric.key,
+                        unit: unit.unitString,
+                        sum: sum,
+                        avg: avg,
+                        min: s.minimumQuantity()?.doubleValue(for: unit),
+                        max: s.maximumQuantity()?.doubleValue(for: unit)
+                    )
+                )
+            }
+        }
+        guard !stats.isEmpty else { return 0 }
+        for chunk in stride(from: 0, to: stats.count, by: Self.uploadChunk) {
+            let slice = Array(stats[chunk..<min(chunk + Self.uploadChunk, stats.count)])
+            try await client.sync(SyncRequest(hourlyStats: slice))
+        }
+        return Set(stats.map(\.date)).count
     }
 
     private func syncDaily(days: Int, client: APIClient, report: inout SyncReport) async throws -> Int {
@@ -362,7 +478,7 @@ actor SyncEngine {
 
     /// Registers observer queries so HealthKit wakes the app when new data arrives.
     func startBackgroundDelivery() {
-        guard HKHealthStore.isHealthDataAvailable(), !observersStarted else { return }
+        guard HKHealthStore.isHealthDataAvailable(), SyncState.backgroundDeliveryEnabled, !observersStarted else { return }
         observersStarted = true
 
         let catalog = HealthCatalog.effective
@@ -375,13 +491,26 @@ actor SyncEngine {
             let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in
                 guard error == nil else { completion(); return }
                 Task {
-                    _ = try? await SyncEngine.shared.sync()
+                    // Honour the battery preference: a background wake while off charge is skipped,
+                    // and the next foreground sync picks the data up anyway.
+                    if await SyncEngine.shared.shouldSkipBackgroundSync() { completion(); return }
+                    _ = try? await SyncEngine.shared.sync(trigger: .background)
                     completion()
                 }
             }
+            activeObservers.append(query)
             store.execute(query)
             store.enableBackgroundDelivery(for: type, frequency: frequency) { _, _ in }
         }
+    }
+
+    /// Stops HealthKit waking the app. Observer queries already running are released too, so
+    /// nothing fires until background delivery is switched back on.
+    func stopBackgroundDelivery() {
+        observersStarted = false
+        store.disableAllBackgroundDelivery { _, _ in }
+        for query in activeObservers { store.stop(query) }
+        activeObservers.removeAll()
     }
 
     // MARK: Mapping
