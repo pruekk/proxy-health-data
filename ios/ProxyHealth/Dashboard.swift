@@ -44,7 +44,7 @@ final class Dashboard {
         let from = Self.dayKey(Calendar.current.date(byAdding: .day, value: -89, to: Date())!)
         // Each read stands on its own: one endpoint failing should cost its own section, not
         // blank every tab.
-        async let metrics: [MetricSummary]? = optional(client, "v1/metrics")
+        async let metrics: [MetricSummary]? = optional(client, "v1/metrics?counts=true")
         async let days: [DailyDoc]? = optional(client, "v1/daily?from=\(from)&to=\(today)")
         async let workouts: [WorkoutDoc]? = optional(client, "v1/workouts?limit=10")
         async let syncs: [SyncLogDoc]? = optional(client, "v1/syncs?limit=30")

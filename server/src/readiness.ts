@@ -127,12 +127,15 @@ export function computeReadiness(inputs: ReadinessInputs) {
   const score = Math.round(factors.reduce((sum, f) => sum + f.score * f.weight, 0) / weightSum)
   const band = bandFor(score)
 
+  const reason = reasonFor(factors)
   return {
     score,
     band: band.key,
     bandLabel: band.label,
     advice: band.advice,
-    headline: headlineFor(factors, band),
+    /** The two parts separately, so a view can lay them out on their own lines. */
+    reason,
+    headline: reason ? `${reason} — ${band.advice}` : `ทุกค่าอยู่ในช่วงปกติ — ${band.advice}`,
     factors: factors.map((f) => ({ ...f, score: Math.round(f.score) })),
     missing,
     weightsUsed: round(weightSum, 2),
@@ -156,12 +159,11 @@ const REASONS: Record<FactorKey, (f: Factor) => string> = {
   load: (f) => `โหลดการซ้อมสูงกว่าปกติ ${f.deviation}`,
 }
 
-/** The sentence is assembled from the worst factors, not written by a model. */
-function headlineFor(factors: Factor[], band: (typeof BANDS)[number]): string {
+/** Assembled from the worst factors, not written by a model. Empty when nothing stands out. */
+function reasonFor(factors: Factor[]): string {
   const concerning = factors
     .filter((f) => f.direction !== 'good')
     .sort((a, b) => a.score - b.score)
     .slice(0, 2)
-  if (!concerning.length) return `ทุกค่าอยู่ในช่วงปกติ — ${band.advice}`
-  return `${concerning.map((f) => REASONS[f.key](f)).join(' และ ')} — ${band.advice}`
+  return concerning.map((f) => REASONS[f.key](f)).join(' และ ')
 }

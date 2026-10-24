@@ -135,17 +135,54 @@
   .readiness .rhead{display:flex;align-items:center;justify-content:space-between}
   .readiness .info{width:19px;height:19px;border-radius:50%;background:#f0f0f3;color:#8a8a8e;
     font:700 11px/19px ui-serif,Georgia,serif;text-align:center}
-  .readiness .rbody{display:flex;align-items:center;gap:15px;margin-top:10px}
+  .readiness .rbody{display:flex;align-items:center;gap:16px;margin-top:16px}
   .readiness .rdial{flex:none}
-  .readiness .rsay{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-2)}
-  .factors{margin-top:14px;border-top:1px solid var(--hair);padding-top:12px;display:grid;gap:9px}
-  .factors .f{display:grid;grid-template-columns:70px 1fr auto;align-items:center;gap:10px}
+  .readiness .rsay{display:flex;flex-direction:column;gap:6px}
+  .readiness .advice{margin:0;font-size:15px;font-weight:600;line-height:1.35;color:var(--ink)}
+  .readiness .reason{margin:0;font-size:12.5px;line-height:1.45;color:var(--muted)}
+  .factors{margin-top:18px;border-top:1px solid var(--hair);padding-top:14px;display:grid;gap:10px}
+  .factors .f{display:grid;grid-template-columns:66px 1fr 108px;align-items:center;gap:10px}
   .factors .fn{font-size:12.5px;color:var(--ink-2);font-weight:500}
   .factors .fb{height:6px;border-radius:4px;background:#f0f0f3;overflow:hidden}
   .factors .fb b{display:block;height:100%;border-radius:4px}
-  .factors .fv{font-size:12.5px;font-weight:600;text-align:right;white-space:nowrap}
-  .factors .fv em{font-style:normal;font-weight:500;color:var(--muted);font-size:11px;margin-left:4px}
-  .rnote{margin:11px 0 0;font-size:11px;color:#b0b0b5;line-height:1.45}
+  .factors .fv{font-size:12.5px;font-weight:600;text-align:right;white-space:nowrap;
+    font-variant-numeric:tabular-nums}
+  .factors .fv em{font-style:normal;font-weight:500;color:#b0b0b5;font-size:11.5px;margin-left:3px}
+  .sheet-dim{position:absolute;inset:0;background:rgba(0,0,0,.28)}
+  .sheet{position:absolute;left:0;right:0;bottom:0;height:88%;background:#fff;
+    border-radius:26px 26px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.18);display:flex;flex-direction:column}
+  .grabber{width:36px;height:5px;border-radius:3px;background:#dcdce2;margin:9px auto 0;flex:none}
+  .sheet-body{padding:14px 22px 30px;overflow-y:auto;scrollbar-width:none}
+  .sheet-body::-webkit-scrollbar{display:none}
+  .sheet-body h2{margin:6px 0 10px;font-size:20px;letter-spacing:-.01em}
+  .sheet-body .lede{margin:0;font-size:13.5px;line-height:1.55;color:var(--ink-2)}
+  .sheet-body .lede b{font-weight:600;color:var(--ink)}
+  .weights{display:grid;gap:9px;margin-top:10px}
+  .weights .w{display:grid;grid-template-columns:72px 1fr 40px;align-items:center;gap:10px;font-size:12.5px}
+  .weights .wb{height:7px;border-radius:4px;background:#f0f0f3;overflow:hidden}
+  .weights .wb b{display:block;height:100%;border-radius:4px;
+    background:linear-gradient(90deg,var(--brand-teal),var(--brand-indigo))}
+  .weights .wp{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  .fine{margin:10px 0 0;font-size:12px;line-height:1.55;color:var(--muted)}
+  .limits{padding-left:16px}
+  .limits li{margin-bottom:5px}
+  .bands{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px}
+  .bands td{padding:7px 0;border-bottom:1px solid var(--hair);vertical-align:middle}
+  .bands td:first-child{width:74px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .bands td:nth-child(2){width:72px;font-weight:600}
+  .bands td:last-child{color:var(--muted)}
+  .bands tr:last-child td{border-bottom:0}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px}
+  .secnote{margin:-4px 2px 10px;font-size:12px;line-height:1.5;color:var(--muted)}
+  .alertbox{position:absolute;left:36px;right:36px;top:168px;background:rgba(252,252,253,.97);
+    border-radius:16px;padding:19px 18px 0;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+  .alertbox.second{top:430px}
+  .alertbox h3{margin:0 0 7px;font-size:16px;font-weight:700}
+  .alertbox p{margin:0 0 16px;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+  .alert-actions{display:flex;border-top:1px solid #e2e2e7;margin:0 -18px}
+  .alert-actions span{flex:1;padding:12px 0;font-size:15px;color:var(--brand-blue);font-weight:500}
+  .alert-actions span:first-child{border-right:1px solid #e2e2e7}
+  .alert-actions .danger{color:#d0352b;font-weight:600}
   .hidden{display:none}
 </style>
 </head>
@@ -188,27 +225,29 @@
         <svg width="116" height="116" viewBox="0 0 116 116" class="rdial">
           <circle cx="58" cy="58" r="46" stroke="#f0f0f3" stroke-width="13" fill="none"/>
           <circle cx="58" cy="58" r="46" stroke="#e8a33d" stroke-width="13" fill="none" stroke-linecap="round"
-                  stroke-dasharray="121 289" transform="rotate(-90 58 58)"/>
-          <text x="58" y="56" text-anchor="middle" font-size="30" font-weight="700" fill="#1c1c1e">42</text>
+                  stroke-dasharray="152 289" transform="rotate(-90 58 58)"/>
+          <text x="58" y="56" text-anchor="middle" font-size="30" font-weight="700" fill="#1c1c1e">53</text>
           <text x="58" y="74" text-anchor="middle" font-size="11" font-weight="600" fill="#8a8a8e">ระวัง</text>
         </svg>
-        <p class="rsay">HRV ต่ำกว่าค่าฐาน 19% และชีพจรพักสูงขึ้น 7 bpm<br>วันนี้เหมาะกับซ้อมเบาหรือพัก</p>
+        <div class="rsay">
+          <p class="advice">วันนี้เหมาะกับซ้อมเบาหรือพัก</p>
+          <p class="reason">HRV ต่ำกว่าค่าฐาน 24% และนอน 6:04 น้อยกว่าเป้า</p>
+        </div>
       </div>
       <div class="factors">
         <div class="f"><span class="fn">HRV</span>
-          <span class="fb"><b style="width:38%;background:#e8a33d"></b></span>
-          <span class="fv">50.9 <em>ฐาน 62.5</em></span></div>
+          <span class="fb"><b style="width:23%;background:#f2544b"></b></span>
+          <span class="fv">47.2 ms <em>(62.1)</em></span></div>
         <div class="f"><span class="fn">ชีพจรพัก</span>
-          <span class="fb"><b style="width:28%;background:#f2544b"></b></span>
-          <span class="fv">67 <em>ฐาน 60</em></span></div>
+          <span class="fb"><b style="width:45%;background:#8ed24a"></b></span>
+          <span class="fv">61 bpm <em>(60.1)</em></span></div>
         <div class="f"><span class="fn">การนอน</span>
-          <span class="fb"><b style="width:82%;background:#8ed24a"></b></span>
-          <span class="fv">6:34 <em>เป้า 8:00</em></span></div>
+          <span class="fb"><b style="width:76%;background:#e8a33d"></b></span>
+          <span class="fv">6:04 <em>(8:00)</em></span></div>
         <div class="f"><span class="fn">โหลด 7 วัน</span>
-          <span class="fb"><b style="width:55%;background:#e8a33d"></b></span>
-          <span class="fv">สูง <em>58 / ฐาน 30 นาที</em></span></div>
+          <span class="fb"><b style="width:100%;background:#8ed24a"></b></span>
+          <span class="fv">36 นาที <em>(30)</em></span></div>
       </div>
-      <p class="rnote">เทียบกับค่าฐาน 90 วันของคุณเอง ไม่ใช่ค่ามาตรฐานประชากร</p>
     </div>
 
     <div class="card">
@@ -274,11 +313,24 @@
         <div class="txt"><b>ฟื้นตัวหลังออกกำลัง</b><span>HR recovery 1 นาที</span></div>
         <div class="end">15.5 <em>bpm</em></div>
       </div>
+    </div>
+
+    <h3 class="sec">ออกกำลังกายล่าสุด</h3>
+    <div class="card">
       <div class="row">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="5.5" r="2" stroke="#2d8abd" stroke-width="1.8"/><path d="M6 20l3-6 3.5 2.5L15 20M9 14l-1-4.5 4 1.5 2 2.5" stroke="#2d8abd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <div class="txt"><b>วิ่งล่าสุด</b><span>วันนี้ 41 นาที · 146 bpm</span></div>
-        <div class="end">4.07 <em>km</em></div>
-        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <div class="txt"><b>วิ่ง · 4.07 km</b><span>วันนี้ 06:12 · 146 bpm · 25.7°C</span></div>
+        <div class="end">41 <em>นาที</em></div>
+      </div>
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="5.5" r="2" stroke="#2d8abd" stroke-width="1.8"/><path d="M6 20l3-6 3.5 2.5L15 20M9 14l-1-4.5 4 1.5 2 2.5" stroke="#2d8abd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>วิ่ง · 5.01 km</b><span>22 ต.ค. · 151 bpm · 25.7°C</span></div>
+        <div class="end">50 <em>นาที</em></div>
+      </div>
+      <div class="row">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="5.5" r="2" stroke="#2d8abd" stroke-width="1.8"/><path d="M6 20l3-6 3.5 2.5L15 20M9 14l-1-4.5 4 1.5 2 2.5" stroke="#2d8abd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="txt"><b>วิ่ง · 5.26 km</b><span>20 ต.ค. · 151 bpm · 28.3°C</span></div>
+        <div class="end">52 <em>นาที</em></div>
       </div>
     </div>
       <h3 class="sec">ร่างกาย <span class="hint">วัดล่าสุด 15 ต.ค. · 9 วันก่อน</span></h3>
@@ -290,8 +342,8 @@
       </div>
       <div class="row">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 4v16M8 7h8M8 17h8" stroke="#5762b1" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-        <div class="txt"><b>ส่วนสูง</b><span>เพิ่งเพิ่มใน Health เมื่อ 23 ต.ค.</span></div>
-        <div class="end">— <em>รอซิงก์</em></div>
+        <div class="txt"><b>ส่วนสูง</b><span>5 ครั้งที่บันทึก</span></div>
+        <div class="end">1.67 <em>m · 23 ต.ค.</em></div>
       </div>
       <div class="row">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="#2bb3bf" stroke-width="1.8"/><path d="M12 7.5v5l3 1.8" stroke="#2bb3bf" stroke-width="1.8" stroke-linecap="round"/></svg></div>
@@ -306,7 +358,7 @@
       <div class="row">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M7 9v6M17 9v6" stroke="#8a8a8e" stroke-width="1.8" stroke-linecap="round"/></svg></div>
         <div class="txt"><b>รอบเอว</b><span>ยังไม่มีข้อมูล</span></div>
-        <div class="end">— <em>ไม่ได้บันทึก</em></div>
+        <div class="end">— <em>ยังไม่ได้วัด</em></div>
       </div>
     </div>
 
@@ -337,27 +389,34 @@
       <div class="tl">
         <div class="ev"><b>ซิงก์อัตโนมัติ</b><time>09:38</time><p>1,284 samples · 2 workouts · 3 วัน · 0.9 วิ</p></div>
         <div class="ev"><b>ซิงก์อัตโนมัติ</b><time>08:12</time><p>642 samples · 3 วัน</p></div>
-        <div class="ev warn"><b>ข้าม 4 metric</b><time>08:12</time><p>height, waistCircumference, bodyTemperature, lowCardioFitnessEvent — ยังไม่ได้สิทธิ์อ่าน · <u>ขอสิทธิ์</u></p></div>
+        <div class="ev"><b>เพิ่ม metric ใหม่</b><time>08:12</time><p>height, waistCircumference, bodyTemperature, lowCardioFitnessEvent · ขอสิทธิ์ Health แล้ว</p></div>
         <div class="ev"><b>อัปเดต catalog</b><time>08:12</time><p>เวอร์ชัน 3b39be042e4c · 36 metric · 6 category</p></div>
         <div class="ev"><b>ดึงประวัติย้อนหลัง</b><time>เมื่อวาน 21:04</time><p>vo2Max และ heartRateRecoveryOneMinute · 2567–2569 · 148 samples</p></div>
         <div class="ev"><b>ดึงข้อมูลรายรอบวิ่ง</b><time>เมื่อวาน 21:02</time><p>28 รอบ · 17,412 samples (HR + pace)</p></div>
       </div>
     </div>
 
-    <h3 class="sec">ความครอบคลุม <span class="hint">เก็บไว้ 2 ปี</span></h3>
+    <h3 class="sec">ความครอบคลุม</h3>
+    <p class="secnote">ข้อมูลดิบที่บันทึกถี่มากเก็บ 7 วัน ยกเว้นช่วงที่ออกกำลังกาย ที่เหลือเก็บตามที่ตั้งไว้ในหน้าตั้งค่า</p>
     <div class="card">
-      <div class="row"><div class="txt"><b>heartRate (raw)</b><span>16 ต.ค. 2569 – วันนี้</span></div><div class="end">8 <em>วัน</em></div></div>
-      <div class="row"><div class="txt"><b>น้ำหนัก / องค์ประกอบร่างกาย</b><span>2 ปีเต็ม</span></div><div class="end">8 <em>ครั้ง</em></div></div>
-      <div class="row"><div class="txt"><b>สรุปรายวัน</b><span>730 วัน</span></div><div class="end">118 <em>วันมีข้อมูล</em></div></div>
-      <div class="row"><div class="txt"><b>การออกกำลังกาย</b><span>2 ปี</span></div><div class="end">28 <em>รอบ</em></div></div>
-    </div>
-
-    <h3 class="sec">ออกกำลังกายล่าสุด</h3>
-    <div class="card">
-      <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="5.5" r="2" stroke="#2d8abd" stroke-width="1.8"/><path d="M6 20l3-6 3.5 2.5L15 20" stroke="#2d8abd" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-        <div class="txt"><b>วิ่ง · 4.07 km</b><span>วันนี้ 06:12 · 146 bpm · 25.7°C</span></div><div class="end">41 <em>นาที</em></div></div>
-      <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="5.5" r="2" stroke="#2d8abd" stroke-width="1.8"/><path d="M6 20l3-6 3.5 2.5L15 20" stroke="#2d8abd" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-        <div class="txt"><b>วิ่ง · 5.01 km</b><span>22 ต.ค. · 151 bpm · 25.7°C</span></div><div class="end">50 <em>นาที</em></div></div>
+      <div class="row"><div class="txt"><b>ชีพจร</b><span>ดิบ · เก็บ 7 วัน · 28,898 รายการ</span></div>
+        <div class="end">วันนี้ <em>09:38</em></div></div>
+      <div class="row"><div class="txt"><b>HRV</b><span>ดิบ · เก็บ 2 ปี · 6,658 รายการ</span></div>
+        <div class="end">วันนี้ <em>08:00</em></div></div>
+      <div class="row"><div class="txt"><b>ชีพจรขณะพัก</b><span>ดิบ · เก็บ 2 ปี · 711 รายการ</span></div>
+        <div class="end">เมื่อวาน <em>18:05</em></div></div>
+      <div class="row"><div class="txt"><b>การนอน</b><span>ดิบ · เก็บ 7 วัน · 230 รายการ</span></div>
+        <div class="end">เมื่อคืน <em>06:04 ชม.</em></div></div>
+      <div class="row"><div class="txt"><b>น้ำหนักและองค์ประกอบร่างกาย</b><span>ดิบ · เก็บ 2 ปี · 8 ครั้ง</span></div>
+        <div class="end">15 ต.ค. <em>9 วันก่อน</em></div></div>
+      <div class="row"><div class="txt"><b>VO₂ max</b><span>ดิบ · เก็บ 2 ปี · 68 รายการ</span></div>
+        <div class="end">ส.ค. 2567 <em>787 วันก่อน</em></div></div>
+      <div class="row"><div class="txt"><b>สรุปรายวัน</b><span>สรุป · เก็บ 2 ปี · 731 วัน</span></div>
+        <div class="end">วันนี้ <em>ครบทุกวัน</em></div></div>
+      <div class="row"><div class="txt"><b>สรุปรายชั่วโมง</b><span>สรุป · เก็บ 2 ปี · 3 วัน</span></div>
+        <div class="end">วันนี้ <em>เริ่มเก็บ 22 ต.ค.</em></div></div>
+      <div class="row"><div class="txt"><b>การออกกำลังกาย</b><span>รายรอบ · เก็บ 2 ปี · 29 รอบ</span></div>
+        <div class="end">วันนี้ <em>06:12</em></div></div>
     </div>
   </div>
 
@@ -373,8 +432,7 @@
       </div>
       <div class="row"><div class="txt"><b>API token</b><span>••••7820 · 48 ตัวอักษร</span></div><div class="end">เปลี่ยน</div>
         <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
-      <div class="row"><div class="txt"><b>Connector ที่เชื่อมอยู่</b><span>Claude · เชื่อมเมื่อ 23 ต.ค.</span></div><div class="end">1 <em>เครื่อง</em></div>
-        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="row"><div class="txt"><b>Connector ที่เชื่อมอยู่</b><span>Claude · เชื่อมเมื่อ 23 ต.ค.</span></div><div class="end">1 <em>เครื่อง</em></div></div>
     </div>
 
     <h3 class="sec">ข้อมูล</h3>
@@ -424,6 +482,80 @@
   <div class="homebar"></div>
 </div>
 <div class="caption">แท็บ 1 — ล่าสุด</div>
+</div>
+
+<!-- ============ SHEET : วิธีคำนวณ ============ -->
+<div class="phone-wrap">
+<div class="phone">
+  <div class="statusbar"><span>9:41</span>
+    <span class="icons"><span class="bars"><i></i><i></i><i></i><i></i></span>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 10.5l2-2.2a2.9 2.9 0 00-4 0l2 2.2z" fill="#1c1c1e"/><path d="M3.6 5.6a6.5 6.5 0 018.8 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/><path d="M1 3a10 10 0 0114 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span class="batt"><b></b></span></span>
+  </div>
+  <div class="sheet-dim"></div>
+  <div class="sheet">
+    <div class="grabber"></div>
+    <div class="sheet-body">
+      <h2>วิธีคำนวณความพร้อมซ้อม</h2>
+      <p class="lede">คะแนน 0–100 จาก 4 ปัจจัย เทียบกับ<b>ค่าฐาน 90 วันของคุณเอง</b> ไม่ใช่ค่ามาตรฐานประชากร — เลข 53 ของคุณกับของคนอื่นจึงเทียบกันไม่ได้</p>
+
+      <div class="label" style="margin-top:20px">สัดส่วนน้ำหนัก</div>
+      <div class="weights">
+        <div class="w"><span>HRV</span><span class="wb"><b style="width:30%"></b></span><span class="wp">30%</span></div>
+        <div class="w"><span>การนอน</span><span class="wb"><b style="width:30%"></b></span><span class="wp">30%</span></div>
+        <div class="w"><span>ชีพจรพัก</span><span class="wb"><b style="width:25%"></b></span><span class="wp">25%</span></div>
+        <div class="w"><span>โหลด 7 วัน</span><span class="wb"><b style="width:15%"></b></span><span class="wp">15%</span></div>
+      </div>
+      <p class="fine">HRV กับชีพจรพักจับความเหนื่อยสะสมได้เร็วที่สุด การนอนถ่วงหนักเท่า HRV เพราะคืนเดียวเปลี่ยนวันถัดไปได้ทั้งวัน ส่วนโหลดเป็นบริบท ไม่ใช่อาการ เลยถ่วงน้อยสุด</p>
+
+      <div class="label" style="margin-top:20px">ระดับคะแนน</div>
+      <table class="bands">
+        <tr><td><span class="dot" style="background:#f2544b"></span>0–34</td><td>พักฟื้น</td><td>ควรพัก หรือขยับเบา ๆ เท่านั้น</td></tr>
+        <tr><td><span class="dot" style="background:#e8a33d"></span>35–54</td><td>ระวัง</td><td>เหมาะกับซ้อมเบาหรือพัก</td></tr>
+        <tr><td><span class="dot" style="background:#8ed24a"></span>55–79</td><td>พร้อม</td><td>ซ้อมตามแผนได้</td></tr>
+        <tr><td><span class="dot" style="background:#3bb273"></span>80–100</td><td>พร้อมมาก</td><td>รับโหลดหนักได้</td></tr>
+      </table>
+
+      <div class="label" style="margin-top:20px">เมื่อข้อมูลไม่ครบ</div>
+      <p class="fine">คิดจากปัจจัยที่มี แล้วเฉลี่ยน้ำหนักใหม่ตามสัดส่วนเดิม เช่นถ้าไม่มีการนอน อีก 3 ตัวจะถูกปรับจาก 30/25/15 เป็น 43/36/21 — ต้องมีอย่างน้อย 2 ใน 4 ไม่งั้นจะไม่แสดงคะแนน</p>
+
+      <div class="label" style="margin-top:20px">ข้อจำกัด</div>
+      <ul class="fine limits">
+        <li>ไม่มีมาตรฐานกลางสำหรับคะแนนแบบนี้ Whoop, Garmin, Oura ใช้สูตรต่างกันและไม่เปิดเผย น้ำหนักข้างบนเป็นการเลือกของเรา</li>
+        <li>ค่าฐานต้องมีข้อมูลอย่างน้อย 2 วันถึงจะคำนวณได้ ช่วงแรกที่เพิ่งเริ่มใช้จะยังไม่นิ่ง</li>
+        <li>ไม่ใช่คำแนะนำทางการแพทย์</li>
+      </ul>
+    </div>
+  </div>
+  <div class="homebar"></div>
+</div>
+<div class="caption">ชีท — กดปุ่ม ⓘ บนการ์ด</div>
+</div>
+
+<!-- ============ ALERTS : ยืนยันก่อนทำ ============ -->
+<div class="phone-wrap">
+<div class="phone">
+  <div class="statusbar"><span>9:41</span>
+    <span class="icons"><span class="bars"><i></i><i></i><i></i><i></i></span>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 10.5l2-2.2a2.9 2.9 0 00-4 0l2 2.2z" fill="#1c1c1e"/><path d="M3.6 5.6a6.5 6.5 0 018.8 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/><path d="M1 3a10 10 0 0114 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span class="batt"><b></b></span></span>
+  </div>
+  <div class="sheet-dim"></div>
+  <div class="alertbox">
+    <h3>ลดการเก็บข้อมูลเหลือ 1 ปี?</h3>
+    <p>ข้อมูลที่เก่ากว่า 1 ปีจะถูกลบภายใน 24 ชั่วโมง และกู้คืนไม่ได้<br><br>
+       จะมีผลกับข้อมูลเดิมที่เก็บไว้แล้วด้วย ไม่ใช่เฉพาะข้อมูลใหม่</p>
+    <div class="alert-actions"><span>ยกเลิก</span><span class="danger">ลดเหลือ 1 ปี</span></div>
+  </div>
+  <div class="alertbox second">
+    <h3>ตัดการเชื่อมต่อ connector ทั้งหมด?</h3>
+    <p>Claude จะหลุดทันทีและต้องเข้าสู่ระบบใหม่<br>
+       โทเคนของแอปนี้ยังใช้ได้ตามเดิม</p>
+    <div class="alert-actions"><span>ยกเลิก</span><span class="danger">ตัดการเชื่อมต่อ</span></div>
+  </div>
+  <div class="homebar"></div>
+</div>
+<div class="caption">ยืนยันก่อนทำ — 2 แบบ</div>
 </div>
 </div>
 

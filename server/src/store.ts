@@ -438,7 +438,7 @@ export async function getProfile(uid: string): Promise<DocumentData> {
   return { uid, ...(snap.exists ? plain(snap.data()!) : {}) }
 }
 
-export async function listMetrics(uid: string, types?: string[], withSources = false) {
+export async function listMetrics(uid: string, types?: string[], withSources = false, withCounts = false) {
   const snap = await metricsCol(uid).get()
   const docs = types?.length ? snap.docs.filter((d) => types.includes(d.id)) : snap.docs
   return Promise.all(
@@ -446,7 +446,11 @@ export async function listMetrics(uid: string, types?: string[], withSources = f
       const { latest, sources, ...rest } = plain(doc.data())
       // Docs written before `latest` was denormalised still need the old per-metric query.
       const resolved = latest ?? (await legacyLatest(uid, doc.id))
-      const base = { ...rest, type: doc.id, latest: resolved ?? null }
+      // `sampleCount` only counts what has been uploaded since the counter was added, and TTL
+      // deletions never decrement it. An aggregation query is exact and costs one read per
+      // thousand documents.
+      const count = withCounts ? (await samplesCol(uid, doc.id).count().get()).data().count : undefined
+      const base = { ...rest, type: doc.id, latest: resolved ?? null, ...(withCounts ? { count } : {}) }
       if (!withSources) return base
       const counts = sources as Record<string, number> | undefined
       return {

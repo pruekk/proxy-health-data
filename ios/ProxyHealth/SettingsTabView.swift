@@ -7,6 +7,9 @@ struct SettingsTabView: View {
     @State private var editingConnection = false
     @State private var confirmReset = false
     @State private var confirmDelete = false
+    @State private var confirmRevoke = false
+    @State private var pendingRetention: Int?
+    @State private var retentionProgress: RetentionProgress?
     @State private var busy: String?
 
     var body: some View {
@@ -30,6 +33,27 @@ struct SettingsTabView: View {
             Button("ซิงก์ใหม่", role: .destructive) { model.resetSync() }
         } message: {
             Text("ลืม anchor ทั้งหมดแล้วดึงข้อมูลใหม่ตามนโยบาย backfill ข้อมูลเดิมบนเซิร์ฟเวอร์ไม่หาย")
+        }
+        .alert("ตัดการเชื่อมต่อ connector ทั้งหมด?", isPresented: $confirmRevoke) {
+            Button("ยกเลิก", role: .cancel) {}
+            Button("ตัดการเชื่อมต่อ", role: .destructive) { Task { await revokeConnectors() } }
+        } message: {
+            Text("Claude จะหลุดทันทีและต้องเข้าสู่ระบบใหม่ โทเคนของแอปนี้ยังใช้ได้ตามเดิม")
+        }
+        // 6: shrinking the window deletes data for good, so it asks first and then re-stamps
+        // what is already stored — otherwise the setting would only affect future writes.
+        .alert("เปลี่ยนการเก็บข้อมูลเป็น \(pendingRetention ?? 0) ปี?", isPresented: .init(
+            get: { pendingRetention != nil },
+            set: { if !$0 { pendingRetention = nil } }
+        )) {
+            Button("ยกเลิก", role: .cancel) { pendingRetention = nil }
+            Button(shrinking ? "ลดเหลือ \(pendingRetention ?? 0) ปี" : "เปลี่ยน", role: shrinking ? .destructive : nil) {
+                if let years = pendingRetention { Task { await applyRetention(years) } }
+            }
+        } message: {
+            Text(shrinking
+                 ? "ข้อมูลที่เก่ากว่า \(pendingRetention ?? 0) ปีจะถูกลบภายใน 24 ชั่วโมง และกู้คืนไม่ได้\n\nจะมีผลกับข้อมูลเดิมที่เก็บไว้แล้วด้วย ไม่ใช่เฉพาะข้อมูลใหม่"
+                 : "ข้อมูลเดิมที่เก็บไว้แล้วจะถูกยืดอายุตามไปด้วย")
         }
         .alert("ลบข้อมูลทั้งหมด?", isPresented: $confirmDelete) {
             Button("ยกเลิก", role: .cancel) {}
@@ -78,7 +102,7 @@ struct SettingsTabView: View {
                 Text("เก็บข้อมูลย้อนหลัง").font(.system(size: 10.5, weight: .bold)).kerning(0.9).foregroundStyle(.secondary)
                 Picker("", selection: Binding(
                     get: { dashboard.retentionYears },
-                    set: { years in Task { await setRetention(years) } }
+                    set: { years in if years != dashboard.retentionYears { pendingRetention = years } }
                 )) {
                     Text("1 ปี").tag(1)
                     Text("2 ปี").tag(2)
@@ -88,6 +112,16 @@ struct SettingsTabView: View {
                 .padding(.top, 10)
                 Text("ข้อมูลที่เก่ากว่านี้จะถูกลบออกอัตโนมัติ ส่วนค่าที่บันทึกถี่มาก (ชีพจร ความเร็ว) เก็บ raw ไว้ 7 วัน ยกเว้นช่วงที่ออกกำลังกาย — สรุปรายชั่วโมงและรายวันยังอยู่ครบตามช่วงที่เลือก")
                     .font(.system(size: 12.5)).foregroundStyle(.secondary).padding(.top, 10)
+
+                if let progress = retentionProgress {
+                    VStack(alignment: .leading, spacing: 7) {
+                        ProgressView(value: progress.fraction)
+                            .tint(Brand.blue)
+                        Text(progress.label)
+                            .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 12)
+                }
             }
         }
     }
@@ -138,7 +172,7 @@ struct SettingsTabView: View {
                     }
                     .buttonStyle(.plain)
                     Divider()
-                    Button { Task { await revokeConnectors() } } label: {
+                    Button { confirmRevoke = true } label: {
                         MetricRow(symbol: "xmark.shield", title: "ตัดการเชื่อมต่อ connector ทั้งหมด",
                                   subtitle: "โทเคนของแอปนี้ยังใช้ได้ตามเดิม", value: "", showsChevron: true)
                     }
@@ -176,16 +210,38 @@ struct SettingsTabView: View {
 
     // MARK: Actions
 
-    private func setRetention(_ years: Int) async {
+    private var shrinking: Bool { (pendingRetention ?? 0) < dashboard.retentionYears }
+
+    /// Saves the new window and re-stamps what is already stored. The work is per scope, so the
+    /// progress is a real count rather than a spinner that cannot say how far along it is.
+    private func applyRetention(_ years: Int) async {
         guard let client = APIClient(settings: model.settings) else { return }
-        busy = "กำลังบันทึก…"
-        defer { busy = nil }
+        pendingRetention = nil
         do {
             try await client.put("v1/settings", body: ["retentionYears": years])
-            await dashboard.load(settings: model.settings, force: true)
             model.appendLog("เปลี่ยนการเก็บข้อมูลเป็น \(years) ปี")
+
+            let scopes = dashboard.metrics.keys.sorted() + ["daily", "hourly", "workouts"]
+            var stamped = 0
+            for (index, scope) in scopes.enumerated() {
+                retentionProgress = RetentionProgress(done: index, total: scopes.count, stamped: stamped, scope: scope)
+                var cursor: String?
+                repeat {
+                    let query = cursor.map { "&after=\($0)" } ?? ""
+                    let result: RetentionResult = try await client.postDecoding(
+                        "v1/retention/apply?scope=\(scope)&dryRun=false\(query)"
+                    )
+                    stamped += result.stamped
+                    cursor = result.done ? nil : result.after
+                } while cursor != nil
+            }
+            retentionProgress = RetentionProgress(done: scopes.count, total: scopes.count, stamped: stamped, scope: nil)
+            await dashboard.load(settings: model.settings, force: true)
+            try? await Task.sleep(for: .seconds(2))
+            retentionProgress = nil
         } catch {
             busy = error.localizedDescription
+            retentionProgress = nil
         }
     }
 

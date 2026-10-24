@@ -136,3 +136,24 @@ describe('wording', () => {
     expect(result.headline!.endsWith(result.advice!)).toBe(true)
   })
 })
+
+describe('reason and headline are separable', () => {
+  test('reason stands alone for the view, headline keeps both for the model', () => {
+    const result = computeReadiness(realDay)
+    expect(result.reason).toBeTruthy()
+    expect(result.reason!.endsWith(result.advice!)).toBe(false)
+    expect(result.headline).toBe(`${result.reason} — ${result.advice}`)
+  })
+
+  test('a clean day has no reason but still has advice', () => {
+    const result = computeReadiness({
+      hrv: { latest: 64, baseline: 62 },
+      restingHeartRate: { latest: 59, baseline: 60 },
+      sleepMinutes: 470,
+      load: { acute: 31, chronic: 30 },
+    })
+    expect(result.reason).toBe('')
+    expect(result.headline).toContain('ทุกค่าอยู่ในช่วงปกติ')
+    expect(result.advice).toBeTruthy()
+  })
+})

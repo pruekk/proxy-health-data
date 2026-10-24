@@ -17,6 +17,9 @@ struct MetricSummary: Codable, Sendable, Identifiable {
     var kind: String?
     var latest: Latest?
     var firstAt: Date?
+    /// Exact, from an aggregation query. `sampleCount` is a running total that never saw the
+    /// documents written before it existed and does not decrease when TTL deletes.
+    var count: Int?
     var sampleCount: Int?
     var sources: [String: Int]?
 
@@ -117,6 +120,8 @@ struct ReadinessDoc: Codable, Sendable {
     var band: String?
     var bandLabel: String?
     var advice: String?
+    /// Why the score is what it is, without the advice glued on.
+    var reason: String?
     var headline: String?
     var factors: [Factor]
     var missing: [String]
@@ -128,6 +133,7 @@ struct ReadinessDoc: Codable, Sendable {
         band: "ready",
         bandLabel: "พร้อม",
         advice: "กำลังโหลด",
+        reason: "กำลังคำนวณความพร้อมจากข้อมูลล่าสุด",
         headline: "กำลังคำนวณความพร้อมจากข้อมูลล่าสุด",
         factors: [
             .init(key: "hrv", score: 60, value: 60, baseline: 60, deviation: "—", direction: "good"),
@@ -149,5 +155,27 @@ struct ReadinessDoc: Codable, Sendable {
             default: $0
             }
         }.joined(separator: ", ")
+    }
+}
+
+struct RetentionResult: Codable, Sendable {
+    var scope: String
+    var scanned: Int
+    var stamped: Int
+    var done: Bool
+    var after: String?
+}
+
+/// Progress of a retention re-stamp: counted, not guessed.
+struct RetentionProgress: Sendable {
+    var done: Int
+    var total: Int
+    var stamped: Int
+    var scope: String?
+
+    var fraction: Double { total > 0 ? Double(done) / Double(total) : 0 }
+    var label: String {
+        if done >= total { return "ปรับข้อมูลเดิมเสร็จแล้ว · \(stamped) รายการ" }
+        return "กำลังปรับข้อมูลเดิม \(done)/\(total) ประเภท · \(stamped) รายการ"
     }
 }

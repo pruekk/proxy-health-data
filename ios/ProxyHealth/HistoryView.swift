@@ -12,7 +12,6 @@ struct HistoryView: View {
                 status
                 timeline
                 coverage
-                recentWorkouts
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 110)
@@ -136,24 +135,59 @@ struct HistoryView: View {
 
     private var coverage: some View {
         VStack(spacing: 0) {
-            SectionTitle(text: "ความครอบคลุม", hint: "เก็บ \(dashboard.retentionYears) ปี")
+            SectionTitle(text: "ความครอบคลุม")
+            Text("ข้อมูลดิบที่บันทึกถี่มากเก็บ 7 วัน ยกเว้นช่วงที่ออกกำลังกาย ที่เหลือเก็บ \(dashboard.retentionYears) ปีตามที่ตั้งไว้")
+                .font(.system(size: 12)).lineSpacing(2).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 2).padding(.bottom, 10)
             Card(vertical: 3) {
                 VStack(spacing: 0) {
-                    let interesting = ["heartRate", "bodyMass", "vo2Max", "sleepAnalysis"]
-                    if interesting.allSatisfy({ dashboard.metric($0) == nil }) {
-                        Text("ยังไม่มีข้อมูลซิงก์").font(.system(size: 13)).foregroundStyle(.secondary)
+                    let rows = coverageRows
+                    ForEach(rows, id: \.type) { row in
+                        MetricRow(symbol: row.symbol, title: row.name, subtitle: row.storage,
+                                  value: row.latest, detail: row.latestDetail, tint: .secondary)
+                        if row.type != rows.last?.type { Divider() }
                     }
-                    ForEach(interesting, id: \.self) { type in
-                        if let metric = dashboard.metric(type) {
-                            MetricRow(symbol: "chart.bar.doc.horizontal", title: type,
-                                      subtitle: coverageRange(metric),
-                                      value: metric.sampleCount.map { "\($0)" } ?? "—",
-                                      detail: "samples", tint: .secondary)
-                            if type != interesting.last { Divider() }
-                        }
+                    if rows.isEmpty {
+                        Text("ยังไม่มีข้อมูลซิงก์").font(.system(size: 13)).foregroundStyle(.secondary)
                     }
                 }
             }
+        }
+    }
+
+    private struct CoverageRow {
+        let type: String
+        let name: String
+        let symbol: String
+        let storage: String
+        let latest: String
+        let latestDetail: String?
+    }
+
+    /// Reads as "what it is, how it is kept, when it last arrived" rather than raw metric keys.
+    private var coverageRows: [CoverageRow] {
+        let shown: [(String, String, String)] = [
+            ("heartRate", "ชีพจร", "heart"),
+            ("heartRateVariabilitySDNN", "HRV", "waveform.path.ecg"),
+            ("restingHeartRate", "ชีพจรขณะพัก", "bed.double"),
+            ("sleepAnalysis", "การนอน", "moon.stars"),
+            ("bodyMass", "น้ำหนักและองค์ประกอบร่างกาย", "scalemass"),
+            ("vo2Max", "VO₂ max", "chart.line.uptrend.xyaxis"),
+        ]
+        let shortWindow = ["heartRate", "runningSpeed", "walkingSpeed", "sleepAnalysis"]
+        return shown.compactMap { type, name, symbol in
+            guard let metric = dashboard.metric(type) else { return nil }
+            let kept = shortWindow.contains(type) ? "เก็บ 7 วัน" : "เก็บ \(dashboard.retentionYears) ปี"
+            let count = metric.count.map { "\($0) รายการ" } ?? "—"
+            return CoverageRow(
+                type: type,
+                name: name,
+                symbol: symbol,
+                storage: "ดิบ · \(kept) · \(count)",
+                latest: metric.measuredAt.map { $0.relativeThai } ?? "—",
+                latestDetail: metric.measuredAt.map { $0.formatted(date: .omitted, time: .shortened) }
+            )
         }
     }
 
@@ -164,33 +198,4 @@ struct HistoryView: View {
         return "\(first.formatted(.dateTime.day().month(.abbreviated))) – ล่าสุด · \(days) วัน"
     }
 
-    private var recentWorkouts: some View {
-        VStack(spacing: 0) {
-            SectionTitle(text: "ออกกำลังกายล่าสุด")
-            Card(vertical: 3) {
-                VStack(spacing: 0) {
-                    ForEach(dashboard.workouts.prefix(5)) { workout in
-                        MetricRow(
-                            symbol: "figure.run",
-                            title: "\(workout.activityTypeName) · \(((workout.distanceM ?? 0) / 1000).formatted(2)) km",
-                            subtitle: subtitle(workout),
-                            value: (workout.durationSec / 60).formatted(0),
-                            detail: "นาที"
-                        )
-                        if workout.id != dashboard.workouts.prefix(5).last?.id { Divider() }
-                    }
-                    if dashboard.workouts.isEmpty {
-                        Text("ยังไม่มีข้อมูลการออกกำลังกาย").font(.system(size: 13)).foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-    }
-
-    private func subtitle(_ workout: WorkoutDoc) -> String {
-        var parts = [workout.startDate.relativeThai]
-        if let hr = workout.avgHeartRate { parts.append("\(hr.formatted(0)) bpm") }
-        if let temp = workout.weatherTempC { parts.append("\(temp.formatted(1))°C") }
-        return parts.joined(separator: " · ")
-    }
 }

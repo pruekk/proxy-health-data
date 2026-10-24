@@ -103,6 +103,7 @@ Credentials (`GOOGLE_APPLICATION_CREDENTIALS`, gcloud ADC, or the Cloud Run serv
 | --- | --- |
 | `GET /health` | liveness (no auth) |
 | `GET /v1/me` | profile for the token's user |
+| `GET /v1/metrics?counts=true` | adds an exact per-metric document count (aggregation query) |
 | `GET /v1/catalog?version=` | the metric catalog the app syncs; `304` when the version matches |
 | `GET /v1/hourly?from&to` | per-hour buckets (one document per day holds all 24 slots) |
 | `GET\|POST /v1/syncs` | sync history, so it survives a reinstall |
@@ -184,7 +185,12 @@ baseline. Same inputs, same words — so the app and `get_training_readiness` ca
 There is no industry standard here; Whoop, Garmin and Oura each use their own undisclosed
 formula, so these weights are a documented choice rather than a reference implementation.
 
-`bun test` covers the scoring, the band boundaries, clamping, partial data and the wording.
+`reason` and `advice` come back separately so a view can put the advice first and the cause
+underneath; `headline` keeps both joined for the MCP tools. `bun test` covers the scoring, the
+band boundaries, clamping, partial data and the wording.
+
+Changing the retention window re-stamps what is already stored, scope by scope, with the app
+showing counted progress. Shrinking the window deletes data for good, so it asks first.
 
 ### Keeping reads cheap
 

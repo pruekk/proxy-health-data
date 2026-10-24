@@ -67,6 +67,10 @@ struct APIClient: Sendable {
         let _: OK = try await send(path, method: "PUT", body: body)
     }
 
+    func postDecoding<Response: Decodable>(_ path: String) async throws -> Response {
+        try await send(path, method: "POST", body: Optional<SyncRequest>.none)
+    }
+
     func post(_ path: String) async throws {
         let _: OK = try await send(path, method: "POST", body: Optional<SyncRequest>.none)
     }

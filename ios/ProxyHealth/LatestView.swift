@@ -21,6 +21,7 @@ struct LatestView: View {
                 todayTiles
                 heart
                 fitness
+                workouts
                 body_
             }
             .padding(.horizontal, 18)
@@ -173,6 +174,40 @@ struct LatestView: View {
         }
     }
 
+    /// The five most recent sessions. Five rather than three because several runs can land on
+    /// the same day, and one row would then hide the rest.
+    private var workouts: some View {
+        Group {
+            if !dashboard.workouts.isEmpty {
+                VStack(spacing: 0) {
+                    SectionTitle(text: "ออกกำลังกายล่าสุด")
+                    Card(vertical: 3) {
+                        VStack(spacing: 0) {
+                            let recent = Array(dashboard.workouts.prefix(5))
+                            ForEach(recent) { workout in
+                                MetricRow(
+                                    symbol: "figure.run",
+                                    title: "\(workout.activityTypeName) · \(((workout.distanceM ?? 0) / 1000).formatted(2)) km",
+                                    subtitle: workoutSubtitle(workout),
+                                    value: (workout.durationSec / 60).formatted(0),
+                                    detail: "นาที"
+                                )
+                                if workout.id != recent.last?.id { Divider() }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func workoutSubtitle(_ workout: WorkoutDoc) -> String {
+        var parts = [workout.startDate.relativeThai]
+        if let hr = workout.avgHeartRate { parts.append("\(hr.formatted(0)) bpm") }
+        if let temp = workout.weatherTempC { parts.append("\(temp.formatted(1))°C") }
+        return parts.joined(separator: " · ")
+    }
+
     private var fitness: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "ความฟิต")
@@ -184,14 +219,6 @@ struct LatestView: View {
                               value: vo2?.value.map { $0.formatted(1) } ?? "—",
                               detail: vo2 == nil ? nil : "mL/kg·min",
                               tint: .orange)
-                    if let workout = dashboard.workouts.first {
-                        Divider()
-                        MetricRow(symbol: "figure.run", title: "\(workout.activityTypeName) ล่าสุด",
-                                  subtitle: "\(workout.startDate.relativeThai) · \((workout.durationSec / 60).formatted(0)) นาที"
-                                      + (workout.avgHeartRate.map { " · \($0.formatted(0)) bpm" } ?? ""),
-                                  value: ((workout.distanceM ?? 0) / 1000).formatted(2),
-                                  detail: "km", showsChevron: false)
-                    }
                 }
             }
         }

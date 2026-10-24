@@ -5,6 +5,7 @@ import SwiftUI
 /// tools can never quote different numbers.
 struct ReadinessCard: View {
     let readiness: ReadinessDoc
+    @State private var explaining = false
     /// `.redacted` greys out text but leaves shapes alone, so a placeholder would show a
     /// convincing green dial. Colour is dropped explicitly instead.
     var placeholder = false
@@ -17,38 +18,52 @@ struct ReadinessCard: View {
                 if !readiness.missing.isEmpty {
                     Text("ขาด \(readiness.missingNames)").font(.system(size: 10.5)).foregroundStyle(.tertiary)
                 }
+                Button { explaining = true } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 8)
             }
 
             if let score = readiness.score {
-                HStack(alignment: .center, spacing: 15) {
+                HStack(alignment: .center, spacing: 16) {
                     dial(score)
-                    Text(readiness.headline ?? readiness.advice ?? "")
-                        .font(.system(size: 13.5))
-                        .lineSpacing(3)
-                        .foregroundStyle(.primary.opacity(0.85))
-                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(readiness.advice ?? "")
+                            .font(.system(size: 15, weight: .semibold))
+                            .lineSpacing(2)
+                        if let reason = readiness.reason, !reason.isEmpty {
+                            Text(reason)
+                                .font(.system(size: 12.5))
+                                .lineSpacing(2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.top, 10)
+                .padding(.top, 16)
 
                 if !readiness.factors.isEmpty {
-                    Divider().padding(.top, 14)
-                    VStack(spacing: 9) {
+                    Divider().padding(.top, 18)
+                    VStack(spacing: 10) {
                         ForEach(readiness.factors) { factor in
                             row(factor)
                         }
                     }
-                    .padding(.top, 12)
+                    .padding(.top, 14)
                 }
 
-                if let basis = readiness.basis {
-                    Text(basis).font(.system(size: 11)).foregroundStyle(.tertiary).padding(.top, 11)
-                }
             } else {
                 Text("ยังคำนวณไม่ได้ — ต้องมีอย่างน้อย 2 ใน 4 ปัจจัย (ขาด \(readiness.missingNames))")
                     .font(.system(size: 13)).foregroundStyle(.secondary).padding(.top, 8)
             }
         }
+        .sheet(isPresented: $explaining) { sheet }
     }
+
+    private var sheet: some View { ReadinessInfoSheet() }
 
     private func dial(_ score: Int) -> some View {
         ZStack {
@@ -68,7 +83,7 @@ struct ReadinessCard: View {
     private func row(_ factor: ReadinessDoc.Factor) -> some View {
         HStack(spacing: 10) {
             Text(factor.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary)
-                .frame(width: 72, alignment: .leading)
+                .frame(width: 66, alignment: .leading)
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Brand.track)
@@ -77,13 +92,15 @@ struct ReadinessCard: View {
                 }
             }
             .frame(height: 6)
+            // One rule down the column: the measured value, then your own normal in brackets.
+            // The deviation is carried by the bar's length and colour instead.
             HStack(spacing: 4) {
-                Text(factor.deviation ?? factor.value.formatted(1))
-                    .font(.system(size: 12.5, weight: .semibold)).monospacedDigit()
+                Text(measuredText(factor)).font(.system(size: 12.5, weight: .semibold)).monospacedDigit()
                 if let baseline = baselineText(factor) {
-                    Text(baseline).font(.system(size: 11)).foregroundStyle(.tertiary)
+                    Text("(\(baseline))").font(.system(size: 11.5)).foregroundStyle(.tertiary)
                 }
             }
+            .frame(width: 108, alignment: .trailing)
         }
     }
 
@@ -91,10 +108,22 @@ struct ReadinessCard: View {
     /// different quantities, so it is formatted the same way as the value.
     private func baselineText(_ factor: ReadinessDoc.Factor) -> String? {
         guard let baseline = factor.baseline else { return nil }
-        if factor.key == "sleep" {
-            return "เป้า \(Int(baseline) / 60):\(String(format: "%02d", Int(baseline) % 60))"
+        if factor.key == "sleep" { return clock(baseline) }
+        return baseline.formatted(baseline < 100 ? 1 : 0)
+    }
+
+    private func measuredText(_ factor: ReadinessDoc.Factor) -> String {
+        switch factor.key {
+        case "hrv": "\(factor.value.formatted(1)) ms"
+        case "restingHeartRate": "\(factor.value.formatted(0)) bpm"
+        case "sleep": clock(factor.value)
+        case "load": "\(factor.value.formatted(0)) นาที"
+        default: factor.value.formatted(1)
         }
-        return "ฐาน \(baseline.formatted(baseline < 100 ? 1 : 0))"
+    }
+
+    private func clock(_ minutes: Double) -> String {
+        "\(Int(minutes) / 60):\(String(format: "%02d", Int(minutes) % 60))"
     }
 
     private var bandColor: Color {

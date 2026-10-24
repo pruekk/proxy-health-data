@@ -88,7 +88,9 @@ export const app = new Elysia()
       .post('/sync', async ({ uid, body }) => ({ ok: true, written: await ingest(uid, body) }), {
         body: SyncBody,
       })
-      .get('/metrics', ({ uid }) => listMetrics(uid))
+      .get('/metrics', ({ uid, query }) => listMetrics(uid, undefined, false, query.counts === 'true'), {
+        query: t.Object({ counts: t.Optional(t.String()) }),
+      })
       .get(
         '/metrics/:type/samples',
         ({ uid, params, query }) => querySamples(uid, params.type, parseRange(query.from, query.to, 7), query.limit ?? 200),
