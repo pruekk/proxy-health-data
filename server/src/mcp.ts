@@ -78,6 +78,29 @@ const VO2_PERCENTILES: Record<string, { band: string; p25: number; p50: number; 
   ],
 }
 
+/**
+ * Estimates VO2 max from the ratio of maximum to resting heart rate (Uth et al., 2004:
+ * VO2max ≈ 15.3 × HRmax/HRrest). Apple only publishes a value after a qualifying outdoor
+ * workout and stops entirely when the Health profile is incomplete — this keeps the number
+ * available in between, and fills the gap in a history that cannot be backfilled.
+ *
+ * Accuracy is roughly ±10-15%, so it is reported as an estimate with its inputs rather than
+ * mixed into the measured series.
+ */
+function estimateVo2Max(restingHr?: number, observedMaxHr?: number, age?: number) {
+  if (!restingHr || restingHr < 30 || restingHr > 120) return null
+  // A max seen during a hard session beats the age formula; 208 − 0.7 × age (Tanaka) is the
+  // fallback, and it is only a population average.
+  const maxHr = observedMaxHr && observedMaxHr > restingHr + 40 ? observedMaxHr : age ? 208 - 0.7 * age : undefined
+  if (!maxHr) return null
+  return {
+    value: Number((15.3 * (maxHr / restingHr)).toFixed(1)),
+    method: 'heart-rate ratio (Uth 2004): 15.3 × HRmax/HRrest',
+    inputs: { restingHr: Number(restingHr.toFixed(0)), maxHr: Number(maxHr.toFixed(0)), maxHrFrom: observedMaxHr && observedMaxHr > restingHr + 40 ? 'observed in a workout' : 'age formula (Tanaka)' },
+    accuracy: 'approximately ±10-15%; not comparable with an Apple Cardio Fitness reading',
+  }
+}
+
 const ageFrom = (dateOfBirth: unknown) => {
   const dob = typeof dateOfBirth === 'string' ? new Date(dateOfBirth) : null
   if (!dob || Number.isNaN(dob.getTime())) return undefined
@@ -415,21 +438,38 @@ const tools: Tool[] = [
     name: 'get_cardio_fitness',
     title: 'Cardio fitness',
     description:
-      'VO2 max (what Apple shows as Cardio Fitness) over time with its trend, alongside resting heart rate, HRV and heart rate recovery. Includes a low/below average/above average/high level when the profile has date of birth and biological sex.',
+      'VO2 max (what Apple shows as Cardio Fitness) over time with its trend, alongside resting heart rate, HRV and heart rate recovery. Includes a low/below average/above average/high level when the profile has date of birth and biological sex. When Apple has published no value — it needs a qualifying outdoor workout and a complete Health profile — an estimate from the resting-to-maximum heart rate ratio is returned instead, marked `source: "estimated"` with its inputs.',
     inputSchema: { type: 'object', properties: { ...dayRange } },
     run: async (uid, args) => {
       const profile = await getProfile(uid)
       const keys = parseDateKeys(str(args.from), str(args.to), 180, String(profile.timeZone ?? 'UTC'))
       const series = await dailySeries(uid, keys.from, keys.to, CARDIO_METRICS)
       const vo2 = (series.vo2Max ?? []) as DocumentDataLike[]
-      const current = vo2.at(-1)?.avg as number | undefined
+      const measured = vo2.at(-1)?.avg as number | undefined
       const age = ageFrom(profile.dateOfBirth)
+
+      // Apple only emits VO2 max after a qualifying outdoor workout, and stops altogether when
+      // the Health profile is missing height or date of birth. Fall back to an estimate so the
+      // number is still answerable, clearly marked as such.
+      let estimate: ReturnType<typeof estimateVo2Max> = null
+      if (measured === undefined) {
+        const restingHr = (series.restingHeartRate ?? []).at(-1)?.avg as number | undefined
+        const workouts = await queryWorkouts(uid, parseRange(undefined, undefined, 90), 200)
+        const observedMaxHr = workouts
+          .map((w) => w.maxHeartRate as number | undefined)
+          .filter((v): v is number => typeof v === 'number')
+          .sort((a, b) => b - a)[0]
+        estimate = estimateVo2Max(restingHr, observedMaxHr, age)
+      }
+      const current = measured ?? estimate?.value
 
       return {
         ...keys,
         vo2Max: {
           unit: 'mL/kg/min',
           current: current ?? null,
+          source: measured !== undefined ? 'apple' : estimate ? 'estimated' : null,
+          estimate,
           at: vo2.at(-1)?.date ?? null,
           trend: summarize(vo2),
           classification: current === undefined ? null : classifyVo2(current, age, profile.biologicalSex),

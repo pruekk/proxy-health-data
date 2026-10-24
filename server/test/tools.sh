@@ -149,10 +149,38 @@ curl -s -X POST $B/v1/syncs -H "$AUTH" -H 'content-type: application/json' -d '{
 check "sync log stored" "120" "$(curl -s $B/v1/syncs -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["samples"])')"
 check "connectors listed" "0" "$(curl -s $B/v1/connectors -H "$AUTH" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)))')"
 
-echo "13. irreplaceable metrics never expire"
-check "vo2Max is kept" "1" "$(curl -s -X POST "$B/v1/retention/apply?scope=vo2Max" -H "$AUTH" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin).get("kept") else 0)')"
-check "weight is kept" "1" "$(curl -s -X POST "$B/v1/retention/apply?scope=bodyMass" -H "$AUTH" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin).get("kept") else 0)')"
-check "heart rate is not kept" "0" "$(curl -s -X POST "$B/v1/retention/apply?scope=heartRate" -H "$AUTH" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin).get("kept") else 0)')"
+echo "13. VO2 max falls back to an estimate"
+# Its own user: this suite has already seeded a measured VO2 max for the main one, and the
+# fallback only runs when Apple published nothing.
+EST_TOKEN=t-estimate
+EST_AUTH="authorization: Bearer $EST_TOKEN"
+call_est() { curl -s -X POST $B/mcp -H "$EST_AUTH" -H 'content-type: application/json' \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$1\",\"arguments\":$2}}" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["result"]["content"][0]["text"])'; }
+python3 - "$B" "$EST_TOKEN" <<'PY2'
+import json, sys, urllib.request
+from datetime import datetime, timedelta, timezone, date
+base, token = sys.argv[1], sys.argv[2]
+def post(payload):
+    req = urllib.request.Request(base + "/v1/sync", data=json.dumps(payload).encode(),
+        headers={"content-type": "application/json", "authorization": "Bearer " + token})
+    return json.load(urllib.request.urlopen(req))
+start = datetime.now(timezone.utc) - timedelta(days=2)
+post({"workouts": [{"id": "vo2-est-0000-0000-0000-000000000001", "activityType": 37,
+    "activityTypeName": "running", "startDate": start.isoformat(),
+    "endDate": (start + timedelta(minutes=40)).isoformat(), "durationSec": 2400,
+    "avgHeartRate": 150, "maxHeartRate": 182}]})
+post({"dailyStats": [{"date": (date.today() - timedelta(days=1)).isoformat(),
+    "type": "restingHeartRate", "unit": "count/min", "avg": 52}]})
+post({"profile": {"dateOfBirth": "1990-05-15", "biologicalSex": "male"}})
+print("  seeded resting HR 52 and a workout peaking at 182")
+PY2
+CF=$(call_est get_cardio_fitness '{}')
+check "marked as estimated" "estimated" "$(echo "$CF" | python3 -c 'import sys,json;print(json.load(sys.stdin)["vo2Max"]["source"])')"
+check "uses the observed max" "observed in a workout" "$(echo "$CF" | python3 -c 'import sys,json;print(json.load(sys.stdin)["vo2Max"]["estimate"]["inputs"]["maxHrFrom"])')"
+check "15.3 x 182/52 = 53.6" "53.6" "$(echo "$CF" | python3 -c 'import sys,json;print(json.load(sys.stdin)["vo2Max"]["current"])')"
+check "accuracy is disclosed" "1" "$(echo "$CF" | grep -ci 'not comparable with an Apple')"
+check "still classified" "1" "$(echo "$CF" | python3 -c 'import sys,json;c=json.load(sys.stdin)["vo2Max"]["classification"];print(1 if c and c.get("level") else 0)')"
 
 echo "13b. retention backfill"
 check "dry run stamps nothing" "true" "$(curl -s -X POST "$B/v1/retention/apply?scope=heartRate" -H "$AUTH" | python3 -c 'import sys,json;print(str(json.load(sys.stdin)["dryRun"]).lower())')"

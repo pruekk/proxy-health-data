@@ -70,7 +70,7 @@ done
 
 # One token per suite, so data seeded by one cannot be seen by another.
 FIRESTORE_EMULATOR_HOST=localhost:8080 FIREBASE_SERVICE_ACCOUNT="$(cat "$TMP/sa.json")" \
-  API_TOKENS=t-oauth:u-oauth,t-tools:u-tools,t-workout:u-workout PORT=3030 \
+  API_TOKENS=t-oauth:u-oauth,t-tools:u-tools,t-workout:u-workout,t-estimate:u-estimate PORT=3030 \
   bun src/index.ts > "$TMP/server.log" 2>&1 &
 until curl -sf -o /dev/null $B/health; do sleep 1; done
 

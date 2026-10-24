@@ -39,9 +39,17 @@ struct SyncSettings: Sendable {
                 SyncState.dailyBackfillDone = false
             }
         }
+        var token = Keychain.read(Keys.token) ?? ""
+        #if DEBUG
+        // Lets the simulator talk to the real API without typing a token in:
+        //   SIMCTL_CHILD_PROXY_HEALTH_TOKEN=… xcrun simctl launch booted <bundle id>
+        if let injected = ProcessInfo.processInfo.environment["PROXY_HEALTH_TOKEN"], !injected.isEmpty {
+            token = injected
+        }
+        #endif
         return SyncSettings(
             serverURL: stored == nil || stored == "http://localhost:3000" ? defaultServerURL : stored!,
-            token: Keychain.read(Keys.token) ?? "",
+            token: token,
             sampleBackfillDays: defaults.object(forKey: Keys.sampleBackfillDays) as? Int ?? 7,
             dailyBackfillDays: defaults.object(forKey: Keys.dailyBackfillDays) as? Int ?? defaultDailyBackfillDays
         )

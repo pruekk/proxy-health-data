@@ -47,7 +47,7 @@ struct LatestView: View {
                 }
                 .foregroundStyle(Brand.blue)
                 .frame(width: 34, height: 34)
-                .background(Color(.systemBackground), in: Circle())
+                .background(Brand.card, in: Circle())
                 .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
             }
             .disabled(model.isSyncing)
@@ -56,8 +56,10 @@ struct LatestView: View {
     }
 
     private var syncLine: String {
-        guard let at = model.lastSyncAt else { return "ยังไม่เคยซิงก์" }
-        return "ซิงก์\(at.relativeThai)"
+        // Falls back to the server's own history, so a fresh install still shows when the data
+        // was last updated rather than claiming it never synced.
+        guard let at = model.lastSyncAt ?? dashboard.syncs.first?.startedAt else { return "ยังไม่เคยซิงก์" }
+        return "ซิงก์เมื่อ \(at.relativeThai)"
     }
 
     private var rings: some View {
@@ -81,11 +83,13 @@ struct LatestView: View {
         HStack(spacing: 12) {
             Tile(label: "ก้าว",
                  value: (dashboard.today?.value("stepCount") ?? 0).formatted(0),
-                 meta: dashboard.average("stepCount", lastDays: 7).map { "เฉลี่ย 7 วัน \($0.formatted(0))" })
+                 meta: dashboard.average("stepCount", lastDays: 7).map { "เฉลี่ย 7 วัน \($0.formatted(0))" },
+                 symbol: "figure.walk", tint: Brand.move)
             Tile(label: "ชีพจรพัก",
                  value: (dashboard.metric("restingHeartRate")?.value ?? 0).formatted(0),
                  unit: "bpm",
-                 meta: dashboard.average("restingHeartRate", lastDays: 30).map { "เฉลี่ย 30 วัน \($0.formatted(0))" })
+                 meta: dashboard.average("restingHeartRate", lastDays: 30).map { "เฉลี่ย 30 วัน \($0.formatted(0))" },
+                 symbol: "heart", tint: .pink)
         }
     }
 
@@ -119,16 +123,26 @@ struct LatestView: View {
         let metric = dashboard.metric(type)
         let value = metric?.value.map { ($0 * scale).formatted(decimals) } ?? "—"
         var detail: String?
+        var style = MetricRow.DetailStyle.plain
         if metric?.value == nil {
             detail = "ยังไม่มีข้อมูล"
         } else if let change = dashboard.change(type), abs(change.delta) > 0.05 {
             let sign = change.delta > 0 ? "+" : "−"
             detail = "\(sign)\(abs(change.delta * scale).formatted(1)) / \(change.days) วัน"
+            // Down is the wanted direction for weight and fat, up for lean mass.
+            let lowerIsBetter = type != "leanBodyMass" && type != "height"
+            style = (change.delta < 0) == lowerIsBetter ? .good : .bad
         } else if let at = metric?.measuredAt {
             detail = at.relativeThai
         }
-        return MetricRow(symbol: symbol, title: title, subtitle: nil,
-                         value: unit == nil ? value : "\(value) \(unit!)", detail: detail)
+        var subtitle: String?
+        if let count = metric?.sampleCount, count > 0 {
+            subtitle = "\(count) ครั้งที่บันทึก"
+        } else if let at = metric?.measuredAt {
+            subtitle = "วัดเมื่อ \(at.relativeThai)"
+        }
+        return MetricRow(symbol: symbol, title: title, subtitle: subtitle,
+                         value: unit == nil ? value : "\(value) \(unit!)", detail: detail, detailStyle: style)
     }
 
     private var heart: some View {

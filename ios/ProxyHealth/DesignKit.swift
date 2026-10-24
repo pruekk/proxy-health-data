@@ -1,27 +1,48 @@
 import SwiftUI
 
-/// Shared look: soft white cards on a light ground, a floating tab bar, ring gauges.
+/// Shared look: soft cards on a recessed ground, a floating tab bar, ring gauges.
+///
+/// Every surface colour is resolved per trait collection. A fixed light grey ground would put
+/// dark cards on a pale background in dark mode, which is exactly backwards.
 enum Brand {
-    static let teal = Color(red: 0.17, green: 0.70, blue: 0.75)
-    static let blue = Color(red: 0.18, green: 0.54, blue: 0.74)
-    static let indigo = Color(red: 0.34, green: 0.38, blue: 0.69)
-    static let ground = Color(red: 0.92, green: 0.92, blue: 0.93)
-    static let move = Color(red: 0.95, green: 0.33, blue: 0.29)
-    static let exercise = Color(red: 0.56, green: 0.82, blue: 0.29)
-    static let stand = Color(red: 0.27, green: 0.78, blue: 0.84)
+    private static func adaptive(light: (Double, Double, Double), dark: (Double, Double, Double)) -> Color {
+        Color(uiColor: UIColor { traits in
+            let c = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: c.0, green: c.1, blue: c.2, alpha: 1)
+        })
+    }
+
+    /// Brand accents lift slightly in the dark so they stay legible on a near-black ground.
+    static let teal = adaptive(light: (0.17, 0.70, 0.75), dark: (0.29, 0.80, 0.85))
+    static let blue = adaptive(light: (0.18, 0.54, 0.74), dark: (0.36, 0.69, 0.90))
+    static let indigo = adaptive(light: (0.34, 0.38, 0.69), dark: (0.50, 0.54, 0.86))
+    static let move = adaptive(light: (0.95, 0.33, 0.29), dark: (1.00, 0.45, 0.40))
+    static let exercise = adaptive(light: (0.56, 0.82, 0.29), dark: (0.66, 0.90, 0.38))
+    static let stand = adaptive(light: (0.27, 0.78, 0.84), dark: (0.38, 0.86, 0.92))
+
+    /// Behind the cards. Light: a shade below white. Dark: below the card, never above it.
+    static let ground = adaptive(light: (0.92, 0.92, 0.93), dark: (0.05, 0.05, 0.06))
+    /// The cards themselves, a step lighter than the ground in dark mode.
+    static let card = adaptive(light: (1, 1, 1), dark: (0.11, 0.11, 0.12))
+    /// The track a ring is drawn on.
+    static let track = adaptive(light: (0.94, 0.94, 0.95), dark: (0.17, 0.17, 0.19))
+
     static let gradient = LinearGradient(colors: [teal, indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 
 struct Card<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: .black.opacity(0.06), radius: 14, x: 0, y: 8)
-            .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+            .background(Brand.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            // Shadows do nothing against a near-black ground, so dark mode leans on the card
+            // being lighter than what is behind it instead.
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.06), radius: 14, x: 0, y: 8)
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.03), radius: 2, x: 0, y: 1)
     }
 }
 
@@ -36,7 +57,8 @@ struct SectionTitle: View {
             if let hint { Text(hint).font(.system(size: 12)).foregroundStyle(.secondary) }
         }
         .padding(.horizontal, 2)
-        .padding(.top, 10)
+        .padding(.top, 20)
+        .padding(.bottom, 2)
     }
 }
 
@@ -48,13 +70,13 @@ struct Ring: View {
     let name: String
     let detail: String
 
-    private var fraction: Double { goal > 0 ? min(value / goal, 1) : 0 }
-    private var percent: Int { goal > 0 ? Int((value / goal * 100).rounded()) : 0 }
+    private var fraction: Double { Trends.fraction(value: value, goal: goal) }
+    private var percent: Int { Trends.percent(value: value, goal: goal) }
 
     var body: some View {
         VStack(spacing: 7) {
             ZStack {
-                Circle().stroke(Color(.systemGray6), lineWidth: 11)
+                Circle().stroke(Brand.track, lineWidth: 11)
                 Circle()
                     .trim(from: 0, to: fraction)
                     .stroke(color, style: StrokeStyle(lineWidth: 11, lineCap: .round))
@@ -75,11 +97,17 @@ struct Tile: View {
     let value: String
     var unit: String?
     var meta: String?
+    var symbol: String?
     var tint: Color = Brand.blue
 
     var body: some View {
         Card {
-            Text(label).font(.system(size: 13)).foregroundStyle(.secondary)
+            HStack(spacing: 7) {
+                if let symbol {
+                    Image(systemName: symbol).font(.system(size: 14, weight: .medium)).foregroundStyle(tint)
+                }
+                Text(label).font(.system(size: 13)).foregroundStyle(.secondary)
+            }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value).font(.system(size: 26, weight: .bold)).monospacedDigit()
                 if let unit { Text(unit).font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary) }
@@ -97,8 +125,21 @@ struct MetricRow: View {
     var subtitle: String?
     let value: String
     var detail: String?
+    /// Renders `detail` as a tinted pill — used for changes like "−1.9 kg / 90 วัน".
+    var detailStyle: DetailStyle = .plain
     var tint: Color = Brand.blue
     var showsChevron = false
+
+    enum DetailStyle { case plain, good, bad, warning }
+
+    private var detailColor: Color {
+        switch detailStyle {
+        case .plain: .secondary
+        case .good: .green
+        case .bad: .red
+        case .warning: .orange
+        }
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -112,15 +153,23 @@ struct MetricRow: View {
                 if let subtitle { Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary) }
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(value).font(.system(size: 14, weight: .semibold)).monospacedDigit()
-                if let detail { Text(detail).font(.system(size: 11.5)).foregroundStyle(.secondary) }
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(value).font(.system(size: 15, weight: .semibold)).monospacedDigit()
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: 11.5, weight: detailStyle == .plain ? .regular : .semibold))
+                        .foregroundStyle(detailColor)
+                        .padding(.horizontal, detailStyle == .plain ? 0 : 6)
+                        .padding(.vertical, detailStyle == .plain ? 0 : 2)
+                        .background(detailStyle == .plain ? .clear : detailColor.opacity(0.14),
+                                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
             }
             if showsChevron {
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.tertiary)
             }
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 13)
     }
 }
 
@@ -157,8 +206,8 @@ struct FloatingTabBar: View {
         }
         .padding(.horizontal, 10)
         .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().stroke(Color.white.opacity(0.6), lineWidth: 1))
-        .shadow(color: .black.opacity(0.16), radius: 20, x: 0, y: 10)
+        .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
+        .shadow(color: .black.opacity(0.22), radius: 20, x: 0, y: 10)
         .padding(.horizontal, 18)
     }
 }
@@ -196,14 +245,5 @@ extension Double {
 
 extension Date {
     /// "3 นาทีที่แล้ว", "เมื่อวาน", "15 ต.ค."
-    var relativeThai: String {
-        let seconds = Date().timeIntervalSince(self)
-        if seconds < 90 { return "เมื่อครู่" }
-        if seconds < 3600 { return "\(Int(seconds / 60)) นาทีที่แล้ว" }
-        if seconds < 86_400 { return "\(Int(seconds / 3600)) ชม.ที่แล้ว" }
-        let days = Int(seconds / 86_400)
-        if days == 1 { return "เมื่อวาน" }
-        if days < 30 { return "\(days) วันก่อน" }
-        return formatted(.dateTime.day().month(.abbreviated).locale(Locale(identifier: "th_TH")))
-    }
+    var relativeThai: String { RelativeThai.describe(self) }
 }

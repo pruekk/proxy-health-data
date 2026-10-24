@@ -1,0 +1,11 @@
+{
+  "": {
+    "swift-dependencies": "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/master.swiftdeps"
+  },
+  "/Users/arniwatt/pruekk/proxy-health-data/ios/ProxyHealth/Core/Trends.swift": {
+    "dependencies": "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/Trends.d",
+    "object": "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/Trends.swift.o",
+    "swiftmodule": "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/Trends~partial.swiftmodule",
+    "swift-dependencies": "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/Trends.swiftdeps"
+  }
+}

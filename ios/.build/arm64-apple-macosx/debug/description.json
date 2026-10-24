@@ -1,0 +1,600 @@
+{
+  "builtTestProducts" : [
+    {
+      "binaryPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.xctest/Contents/MacOS/ProxyHealthCorePackageTests",
+      "packagePath" : "/Users/arniwatt/pruekk/proxy-health-data/ios",
+      "productName" : "ProxyHealthCorePackageTests"
+    }
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.ProxyHealthCore-arm64-apple-macosx14.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/sources",
+      "importPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/ProxyHealth/Core/Trends.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "ProxyHealthCore",
+      "moduleOutputPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules/ProxyHealthCore.swiftmodule",
+      "objects" : [
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/Trends.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-enable-batch-mode",
+        "-index-store-path",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-module-cache-path",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/ProxyHealthCore-Swift.h",
+        "-swift-version",
+        "5",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "ios"
+      ],
+      "outputFileMapPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/Trends.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules/ProxyHealthCore.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/ProxyHealth/Core/Trends.swift"
+      ],
+      "tempsPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.ProxyHealthCorePackageTests-arm64-apple-macosx14.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/sources",
+      "importPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.derived/runner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules/ProxyHealthCoreTests.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "ProxyHealthCorePackageTests",
+      "moduleOutputPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules/ProxyHealthCorePackageTests.swiftmodule",
+      "objects" : [
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/runner.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-enable-batch-mode",
+        "-index-store-path",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-module-cache-path",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/ProxyHealthCorePackageTests-Swift.h",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "ios"
+      ],
+      "outputFileMapPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules/ProxyHealthCorePackageTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.derived/runner.swift"
+      ],
+      "tempsPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.ProxyHealthCoreTests-arm64-apple-macosx14.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/sources",
+      "importPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/APIPathTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/DateTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/TrendsTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules/ProxyHealthCore.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "ProxyHealthCoreTests",
+      "moduleOutputPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules/ProxyHealthCoreTests.swiftmodule",
+      "objects" : [
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/APIPathTests.swift.o",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/DateTests.swift.o",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/TrendsTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-enable-batch-mode",
+        "-index-store-path",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-module-cache-path",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-swift-version",
+        "5",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "ios"
+      ],
+      "outputFileMapPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/APIPathTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/DateTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/TrendsTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules/ProxyHealthCoreTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/APIPathTests.swift",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/DateTests.swift",
+        "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/TrendsTests.swift"
+      ],
+      "tempsPath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "ProxyHealthCore" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "ProxyHealthCore",
+      "-package-name",
+      "ios",
+      "-incremental",
+      "-c",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/ProxyHealth/Core/Trends.swift",
+      "-I",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-enable-batch-mode",
+      "-index-store-path",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-module-cache-path",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/ProxyHealthCore-Swift.h",
+      "-swift-version",
+      "5",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "ios",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "ProxyHealthCorePackageTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "ProxyHealthCorePackageTests",
+      "-package-name",
+      "ios",
+      "-incremental",
+      "-c",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.derived/runner.swift",
+      "-I",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-enable-batch-mode",
+      "-index-store-path",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-module-cache-path",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/ProxyHealthCorePackageTests-Swift.h",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "ios",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "ProxyHealthCoreTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "ProxyHealthCoreTests",
+      "-package-name",
+      "ios",
+      "-incremental",
+      "-c",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/APIPathTests.swift",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/DateTests.swift",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/TrendsTests.swift",
+      "-I",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-enable-batch-mode",
+      "-index-store-path",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-module-cache-path",
+      "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-swift-version",
+      "5",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "ios",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "ProxyHealthCore" : [
+
+    ],
+    "ProxyHealthCorePackageTests" : [
+      "ProxyHealthCoreTests",
+      "ProxyHealthCore"
+    ],
+    "ProxyHealthCoreTests" : [
+      "ProxyHealthCore"
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+    "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.derived/runner.swift" : {
+      "inputs" : [
+
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.derived/runner.swift"
+        }
+      ]
+    }
+  },
+  "writeCommands" : {
+    "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/ProxyHealth/Core/Trends.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/sources"
+    },
+    "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.derived/runner.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/sources"
+    },
+    "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCore.build/Trends.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/APIPathTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/DateTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/TrendsTests.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.product/Objects.LinkFileList"
+    },
+    "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/APIPathTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/DateTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/arniwatt/pruekk/proxy-health-data/ios/CoreTests/ProxyHealthCoreTests/TrendsTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCoreTests.build/sources"
+    },
+    "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

@@ -1,0 +1,4 @@
+module ProxyHealthCorePackageTests {
+    header "/Users/arniwatt/pruekk/proxy-health-data/ios/.build/arm64-apple-macosx/debug/ProxyHealthCorePackageTests.build/ProxyHealthCorePackageTests-Swift.h"
+    requires objc
+}

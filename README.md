@@ -253,6 +253,16 @@ static mockup the layout came from.
 Automatic syncs run when the app comes to the foreground and, if background delivery is on, when
 HealthKit wakes the app. Both are rate limited to one sync every two minutes; a manual tap is not.
 
+Unit tests cover the pure logic — URL building, trend maths, date parsing, relative wording:
+
+```bash
+cd ios && swift test     # 28 tests
+```
+
+`ios/Package.swift` compiles the app's own files from `ProxyHealth/Core` rather than copying
+them, so there is one definition and the tests cannot drift. Only files free of UIKit, SwiftUI and
+HealthKit belong in that folder. The Xcode project ignores the manifest and builds as before.
+
 1. Open `ios/ProxyHealth.xcodeproj` in Xcode.
 2. Target → Signing & Capabilities: pick your Team (the HealthKit capability and background
    delivery are already in `ProxyHealth.entitlements`). Change the bundle id if needed.

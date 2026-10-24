@@ -19,6 +19,10 @@ struct APIClient: Sendable {
         token = settings.token
     }
 
+    private func url(for pathAndQuery: String) -> URL {
+        APIPath.url(base: baseURL, pathAndQuery: pathAndQuery)
+    }
+
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -48,7 +52,7 @@ struct APIClient: Sendable {
     /// Reads for the UI. Raw bytes, because the dashboard decodes with its own date strategy —
     /// the server sends ISO strings with and without fractional seconds.
     func getRaw(_ path: String) async throws -> Data {
-        var request = URLRequest(url: baseURL.appending(path: path))
+        var request = URLRequest(url: url(for: path))
         request.timeoutInterval = 30
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -73,7 +77,7 @@ struct APIClient: Sendable {
 
     /// Like `send`, but treats 304 Not Modified as "nothing to do" instead of an error.
     private func sendOptional<Response: Decodable>(_ path: String, method: String) async throws -> Response? {
-        var request = URLRequest(url: baseURL.appending(path: path))
+        var request = URLRequest(url: url(for: path))
         request.httpMethod = method
         request.timeoutInterval = 30
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -87,7 +91,7 @@ struct APIClient: Sendable {
     }
 
     private func send<Body: Encodable, Response: Decodable>(_ path: String, method: String, body: Body?) async throws -> Response {
-        var request = URLRequest(url: baseURL.appending(path: path))
+        var request = URLRequest(url: url(for: path))
         request.httpMethod = method
         request.timeoutInterval = 60
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
