@@ -71,7 +71,7 @@ struct LatestView: View {
         // Falls back to the server's own history, so a fresh install still shows when the data
         // was last updated rather than claiming it never synced.
         guard let at = model.lastSyncAt ?? dashboard.lastSync?.startedAt else { return "ยังไม่เคยซิงก์" }
-        return "ซิงก์เมื่อ \(at.relativeThai)"
+        return RelativeThai.syncedPhrase(at)
     }
 
     private var rings: some View {

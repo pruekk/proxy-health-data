@@ -91,7 +91,9 @@ struct Ring: View {
                 Text("\(percent)%").font(.system(size: 19, weight: .bold)).monospacedDigit()
             }
             .frame(width: 84, height: 84)
-            Text(name).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary).padding(.top, 7)
+            // 13 rather than the tile's 6: the dial's bottom edge is a curve, so the same
+            // numeric gap reads as tighter than it does under a flat line of text.
+            Text(name).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary).padding(.top, 13)
             Text(detail).font(.system(size: 11)).foregroundStyle(.tertiary).padding(.top, 1)
         }
         .frame(maxWidth: .infinity)

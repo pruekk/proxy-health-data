@@ -83,6 +83,13 @@ public enum RelativeThai {
         return nil_fallback(date)
     }
 
+    /// "ซิงก์เมื่อ 8 นาทีที่แล้ว", but "ซิงก์เมื่อครู่" — the relative wording already starts
+    /// with เมื่อ for the recent cases, and gluing a second one on reads as a stutter.
+    public static func syncedPhrase(_ date: Date, now: Date = Date()) -> String {
+        let relative = describe(date, now: now)
+        return relative.hasPrefix("เมื่อ") ? "ซิงก์\(relative)" : "ซิงก์เมื่อ \(relative)"
+    }
+
     private static func nil_fallback(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "th_TH")
