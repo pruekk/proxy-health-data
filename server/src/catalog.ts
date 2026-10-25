@@ -103,6 +103,63 @@ const categories: CategoryMetric[] = [
   { key: 'lowCardioFitnessEvent', identifier: 'HKCategoryTypeIdentifierLowCardioFitnessEvent', backfill: 'extended' },
 ]
 
+/**
+ * What the app puts on screen. Here rather than in Swift so adding a metric is one deploy:
+ * it syncs, it is stored, and it appears — without an Xcode build. Deliberately limited to
+ * which rows exist and what they are called; colour, size and layout stay in the app.
+ */
+const display = {
+  /** The "ร่างกาย" card, in order. */
+  body: [
+    { key: 'bodyMass', name: 'น้ำหนัก', unit: 'kg', decimals: 1, symbol: 'scalemass' },
+    { key: 'height', name: 'ส่วนสูง', unit: 'm', decimals: 2, symbol: 'figure.stand' },
+    { key: 'bodyMassIndex', name: 'BMI', decimals: 1, symbol: 'circle.dashed' },
+    { key: 'bodyFatPercentage', name: 'ไขมัน', unit: '%', decimals: 1, scale: 100, symbol: 'drop' },
+    { key: 'leanBodyMass', name: 'มวลไร้ไขมัน', unit: 'kg', decimals: 1, symbol: 'figure.arms.open' },
+    { key: 'waistCircumference', name: 'รอบเอว', unit: 'cm', decimals: 1, symbol: 'ruler' },
+  ],
+  /** The two-up tiles under "หัวใจและการหายใจ". */
+  vitals: [
+    { key: 'heartRateVariabilitySDNN', name: 'HRV', unit: 'ms', decimals: 1, averageDays: 30 },
+    { key: 'respiratoryRate', name: 'หายใจ', unit: '/นาที', decimals: 1 },
+    { key: 'walkingHeartRateAverage', name: 'ชีพจรตอนเดิน', unit: 'bpm', decimals: 0 },
+    { key: 'oxygenSaturation', name: 'ออกซิเจน', unit: '%', decimals: 0, scale: 100 },
+  ],
+  /** Rows in the coverage list on the history tab. */
+  coverage: [
+    { key: 'heartRate', name: 'ชีพจร', symbol: 'heart' },
+    { key: 'heartRateVariabilitySDNN', name: 'HRV', symbol: 'waveform.path.ecg' },
+    { key: 'restingHeartRate', name: 'ชีพจรขณะพัก', symbol: 'bed.double' },
+    { key: 'sleepAnalysis', name: 'การนอน', symbol: 'moon.stars' },
+    { key: 'bodyMass', name: 'น้ำหนักและองค์ประกอบร่างกาย', symbol: 'scalemass' },
+    { key: 'vo2Max', name: 'VO₂ max', symbol: 'chart.line.uptrend.xyaxis' },
+  ],
+  /** Choices in the retention picker. */
+  retentionOptions: [1, 2, 5],
+}
+
+/**
+ * Body battery. Garmin's runs on beat-to-beat HRV all day, which Apple Watch does not expose, so
+ * this approximates with heart rate against resting and the energy actually burned. Every
+ * constant is here so it can be tuned with a deploy instead of a rebuild.
+ */
+const battery = {
+  /** Points a full night returns. A night at the target gives this much. */
+  sleepChargeFull: 55,
+  sleepTargetMinutes: 480,
+  /** Drained every waking hour before any activity. */
+  idleDrainPerHour: 2,
+  /** Active kilocalories in an hour, divided by this, is the activity drain. */
+  activeEnergyDivisor: 20,
+  /** Heart rate this far above resting starts costing; the excess is divided by the next value. */
+  hrStressOffset: 15,
+  hrStressDivisor: 10,
+  /** Returned per hour spent near resting heart rate with almost no movement. */
+  restChargePerHour: 2,
+  min: 0,
+  max: 100,
+}
+
 const body = {
   quantities,
   categories,
@@ -110,6 +167,8 @@ const body = {
   workoutDetailMetrics: ['heartRate', 'runningSpeed', 'cyclingSpeed'],
   // Characteristics are read once; without them VO2 max cannot be classified.
   characteristics: ['HKCharacteristicTypeIdentifierDateOfBirth', 'HKCharacteristicTypeIdentifierBiologicalSex'],
+  display,
+  battery,
   sync: {
     extendedBackfillDays: 730,
     workoutDetailLimit: 40,
@@ -118,6 +177,19 @@ const body = {
     shortRetentionDays: 7,
     /** Days of hourly buckets the app recomputes on every sync, for late-arriving samples. */
     hourlyRecomputeDays: 3,
+    /** Minimum gap between automatic syncs; a manual tap ignores it. */
+    cooldownSeconds: 120,
+    /** Samples read per anchored page, and per upload request. */
+    pageSize: 2000,
+    uploadChunk: 2000,
+    /** How much the dashboard loads: days of daily aggregates, and list lengths. */
+    dashboardDays: 90,
+    workoutsLimit: 10,
+    syncsLimit: 30,
+    /** Seconds a dashboard load is reused before refetching. */
+    dashboardCacheSeconds: 60,
+    /** Recent workouts shown on the home screen. */
+    recentWorkouts: 5,
   },
 }
 

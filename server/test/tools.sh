@@ -50,7 +50,7 @@ check "dateOfBirth stored" "1990-05-15" "$(echo "$ME" | python3 -c 'import sys,j
 check "biologicalSex stored" "male" "$(echo "$ME" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("biologicalSex"))')"
 
 echo "2. tools/list"
-check "tool count" "12" "$(curl -s -X POST $B/mcp -H "$AUTH" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
+check "tool count" "13" "$(curl -s -X POST $B/mcp -H "$AUTH" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
 
 echo "3. get_latest_values"
 LV=$(call get_latest_values '{"types":["bodyMass","height","vo2Max"]}')
@@ -268,6 +268,37 @@ PY2
 R=$(call_est get_training_readiness '{}')
 check "picks last night" "400" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="sleep"];print(f[0]["value"] if f else "none")')"
 check "not the fragment" "1" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="sleep"];print(0 if f and f[0]["value"] == 34 else 1)')"
+
+echo "16. body battery end to end"
+python3 - "$B" "$EST_TOKEN" <<'PY2'
+import json, sys, urllib.request
+from datetime import datetime, timedelta, timezone
+base, token = sys.argv[1], sys.argv[2]
+now = datetime.now(timezone.utc)
+today = now.date().isoformat()
+# Hours of the day: a quiet morning, then a run at 09:00 that costs most of the battery.
+hourly = []
+for hour in range(24):
+    run = hour == 9
+    hourly += [
+        {"date": today, "hour": hour, "type": "activeEnergyBurned", "unit": "kcal", "sum": 600 if run else 10},
+        {"date": today, "hour": hour, "type": "heartRate", "unit": "count/min", "avg": 150 if run else 62},
+    ]
+payload = {"timeZone": "UTC", "hourlyStats": hourly,
+           "dailyStats": [{"date": today, "type": "restingHeartRate", "unit": "count/min", "avg": 55}]}
+req = urllib.request.Request(base + "/v1/sync", data=json.dumps(payload).encode(),
+    headers={"content-type": "application/json", "authorization": "Bearer " + token})
+urllib.request.urlopen(req)
+print("  seeded today's hourly energy and heart rate")
+PY2
+R=$(call_est get_body_battery '{}')
+LEVEL=$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["level"])')
+check "level is within range" "1" "$([ "$LEVEL" -ge 0 ] && [ "$LEVEL" -le 100 ] && echo 1 || echo 0)"
+check "the night charged something" "1" "$(echo "$R" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["chargedOvernight"] > 0 else 0)')"
+check "the day drained something" "1" "$(echo "$R" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["drainedToday"] > 0 else 0)')"
+check "carries a coaching line" "1" "$(echo "$R" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin).get("message") else 0)')"
+check "says it is not Garmin" "1" "$(echo "$R" | grep -ci 'Garmin')"
+check "REST route agrees with the tool" "$LEVEL" "$(curl -s $B/v1/battery -H "$EST_AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)["level"])')"
 
 echo
 echo "passed: $pass  failed: $fail"

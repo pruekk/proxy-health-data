@@ -13,6 +13,7 @@ final class Dashboard {
     var connectors: [ConnectorDoc] = []
     var retentionYears = 1
     var readiness: ReadinessDoc?
+    var battery: BatteryDoc?
     /// Reports this device wrote, shown immediately so the history does not wait for the server
     /// to acknowledge a sync that already finished.
     var localSyncs: [SyncReport] = SyncState.recentSyncs
@@ -35,22 +36,23 @@ final class Dashboard {
     func load(settings: SyncSettings, force: Bool = false) async {
         guard let client = APIClient(settings: settings) else { return }
         // A tab switch should not re-fetch what was loaded seconds ago.
-        if !force, let loadedAt, Date().timeIntervalSince(loadedAt) < 60 { return }
+        if !force, let loadedAt, Date().timeIntervalSince(loadedAt) < AppConfig.dashboardCacheSeconds { return }
         isLoading = true
         failures = []
         defer { isLoading = false }
 
         let today = Self.dayKey(Date())
-        let from = Self.dayKey(Calendar.current.date(byAdding: .day, value: -89, to: Date())!)
+        let from = Self.dayKey(Calendar.current.date(byAdding: .day, value: -(AppConfig.dashboardDays - 1), to: Date())!)
         // Each read stands on its own: one endpoint failing should cost its own section, not
         // blank every tab.
         async let metrics: [MetricSummary]? = optional(client, "v1/metrics?counts=true")
         async let days: [DailyDoc]? = optional(client, "v1/daily?from=\(from)&to=\(today)")
-        async let workouts: [WorkoutDoc]? = optional(client, "v1/workouts?limit=10")
-        async let syncs: [SyncLogDoc]? = optional(client, "v1/syncs?limit=30")
+        async let workouts: [WorkoutDoc]? = optional(client, "v1/workouts?limit=\(AppConfig.workoutsLimit)")
+        async let syncs: [SyncLogDoc]? = optional(client, "v1/syncs?limit=\(AppConfig.syncsLimit)")
         async let connectors: [ConnectorDoc]? = optional(client, "v1/connectors")
         async let serverSettings: ServerSettings? = optional(client, "v1/settings")
         async let readiness: ReadinessDoc? = optional(client, "v1/readiness")
+        async let battery: BatteryDoc? = optional(client, "v1/battery")
 
         if let metrics = await metrics {
             self.metrics = Dictionary(uniqueKeysWithValues: metrics.map { ($0.type, $0) })
@@ -63,6 +65,7 @@ final class Dashboard {
         // Keep the last good value when a single read fails, like every other field here —
         // overwriting with nil made the readiness card vanish on a hiccup.
         if let readiness = await readiness { self.readiness = readiness }
+        if let battery = await battery { self.battery = battery }
         self.error = failures.isEmpty ? nil : failures.joined(separator: " · ")
         self.loadedAt = Date()
     }

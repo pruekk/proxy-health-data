@@ -136,7 +136,7 @@ struct HistoryView: View {
     private var coverage: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "ความครอบคลุม")
-            Text("ข้อมูลดิบที่บันทึกถี่มากเก็บ 7 วัน ยกเว้นช่วงที่ออกกำลังกาย ที่เหลือเก็บ \(dashboard.retentionYears) ปีตามที่ตั้งไว้")
+            Text("ข้อมูลดิบที่บันทึกถี่มากเก็บ \(AppConfig.shortRetentionDays) วัน ยกเว้นช่วงที่ออกกำลังกาย ที่เหลือเก็บ \(dashboard.retentionYears) ปีตามที่ตั้งไว้")
                 .font(.system(size: 12)).lineSpacing(2).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 2).padding(.bottom, 10)
@@ -167,24 +167,19 @@ struct HistoryView: View {
 
     /// Reads as "what it is, how it is kept, when it last arrived" rather than raw metric keys.
     private var coverageRows: [CoverageRow] {
-        let shown: [(String, String, String)] = [
-            ("heartRate", "ชีพจร", "heart"),
-            ("heartRateVariabilitySDNN", "HRV", "waveform.path.ecg"),
-            ("restingHeartRate", "ชีพจรขณะพัก", "bed.double"),
-            ("sleepAnalysis", "การนอน", "moon.stars"),
-            ("bodyMass", "น้ำหนักและองค์ประกอบร่างกาย", "scalemass"),
-            ("vo2Max", "VO₂ max", "chart.line.uptrend.xyaxis"),
-        ]
-        // Only the high-frequency types are on the short window; sleep keeps the full retention.
-        let shortWindow = ["heartRate", "runningSpeed", "walkingSpeed"]
-        return shown.compactMap { type, name, symbol in
-            guard let metric = dashboard.metric(type) else { return nil }
-            let kept = shortWindow.contains(type) ? "เก็บ 7 วัน" : "เก็บ \(dashboard.retentionYears) ปี"
+        // Which rows, their names and which ones are on the short window all come from the
+        // server catalog, so retention changes show up without a rebuild.
+        let shortWindow = AppConfig.shortRetentionKeys
+        return AppConfig.display.coverage.compactMap { item in
+            guard let metric = dashboard.metric(item.key) else { return nil }
+            let kept = shortWindow.contains(item.key)
+                ? "เก็บ \(AppConfig.shortRetentionDays) วัน"
+                : "เก็บ \(dashboard.retentionYears) ปี"
             let count = metric.count.map { "\($0) รายการ" } ?? "—"
             return CoverageRow(
-                type: type,
-                name: name,
-                symbol: symbol,
+                type: item.key,
+                name: item.name,
+                symbol: item.symbol ?? "circle.dashed",
                 storage: "ดิบ · \(kept) · \(count)",
                 latest: metric.measuredAt.map { $0.relativeThai } ?? "—",
                 latestDetail: metric.measuredAt.map { $0.formatted(date: .omitted, time: .shortened) }

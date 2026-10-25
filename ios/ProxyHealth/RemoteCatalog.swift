@@ -26,12 +26,45 @@ struct RemoteCatalog: Codable, Sendable {
         var backfill: String?
     }
 
+    /// Which rows appear on screen and what they are called. Server-side so a new metric shows
+    /// up with a deploy rather than an Xcode build.
+    struct Row: Codable, Sendable, Identifiable {
+        let key: String
+        let name: String
+        var unit: String?
+        var decimals: Int?
+        var scale: Double?
+        var symbol: String?
+        var averageDays: Int?
+
+        var id: String { key }
+    }
+
+    struct Display: Codable, Sendable {
+        var body: [Row] = []
+        var vitals: [Row] = []
+        var coverage: [Row] = []
+        var retentionOptions: [Int] = [1, 2, 5]
+    }
+
+    struct Battery: Codable, Sendable {
+        var sleepTargetMinutes: Int?
+    }
+
     struct Sync: Codable, Sendable {
         var extendedBackfillDays: Int?
         var workoutDetailLimit: Int?
         var recoveryTailSeconds: Double?
         var shortRetentionDays: Int?
         var hourlyRecomputeDays: Int?
+        var cooldownSeconds: Double?
+        var pageSize: Int?
+        var uploadChunk: Int?
+        var dashboardDays: Int?
+        var workoutsLimit: Int?
+        var syncsLimit: Int?
+        var dashboardCacheSeconds: Double?
+        var recentWorkouts: Int?
     }
 
     let version: String
@@ -39,6 +72,8 @@ struct RemoteCatalog: Codable, Sendable {
     var categories: [Category]
     var workoutDetailMetrics: [String]?
     var characteristics: [String]?
+    var display: Display?
+    var battery: Battery?
     var sync: Sync?
 }
 
@@ -107,6 +142,59 @@ extension Backfill {
         case "extended": self = .extended
         default: self = .standard
         }
+    }
+}
+
+extension RemoteCatalog.Display {
+    /// Used until the catalog has been fetched once.
+    static let fallback = RemoteCatalog.Display(
+        body: [
+            .init(key: "bodyMass", name: "น้ำหนัก", unit: "kg", decimals: 1, symbol: "scalemass"),
+            .init(key: "height", name: "ส่วนสูง", unit: "m", decimals: 2, symbol: "figure.stand"),
+            .init(key: "bodyMassIndex", name: "BMI", decimals: 1, symbol: "circle.dashed"),
+            .init(key: "bodyFatPercentage", name: "ไขมัน", unit: "%", decimals: 1, scale: 100, symbol: "drop"),
+            .init(key: "leanBodyMass", name: "มวลไร้ไขมัน", unit: "kg", decimals: 1, symbol: "figure.arms.open"),
+            .init(key: "waistCircumference", name: "รอบเอว", unit: "cm", decimals: 1, symbol: "ruler"),
+        ],
+        vitals: [
+            .init(key: "heartRateVariabilitySDNN", name: "HRV", unit: "ms", decimals: 1, averageDays: 30),
+            .init(key: "respiratoryRate", name: "หายใจ", unit: "/นาที", decimals: 1),
+            .init(key: "walkingHeartRateAverage", name: "ชีพจรตอนเดิน", unit: "bpm", decimals: 0),
+            .init(key: "oxygenSaturation", name: "ออกซิเจน", unit: "%", decimals: 0, scale: 100),
+        ],
+        coverage: [
+            .init(key: "heartRate", name: "ชีพจร", symbol: "heart"),
+            .init(key: "heartRateVariabilitySDNN", name: "HRV", symbol: "waveform.path.ecg"),
+            .init(key: "restingHeartRate", name: "ชีพจรขณะพัก", symbol: "bed.double"),
+            .init(key: "sleepAnalysis", name: "การนอน", symbol: "moon.stars"),
+            .init(key: "bodyMass", name: "น้ำหนักและองค์ประกอบร่างกาย", symbol: "scalemass"),
+            .init(key: "vo2Max", name: "VO₂ max", symbol: "chart.line.uptrend.xyaxis"),
+        ]
+    )
+}
+
+enum AppConfig {
+    static var display: RemoteCatalog.Display { CatalogStore.cached?.display ?? .fallback }
+    static var sync: RemoteCatalog.Sync { CatalogStore.cached?.sync ?? RemoteCatalog.Sync() }
+
+    static var cooldownSeconds: TimeInterval { sync.cooldownSeconds ?? 120 }
+    static var pageSize: Int { sync.pageSize ?? 2000 }
+    static var uploadChunk: Int { sync.uploadChunk ?? 2000 }
+    static var dashboardDays: Int { sync.dashboardDays ?? 90 }
+    static var workoutsLimit: Int { sync.workoutsLimit ?? 10 }
+    static var syncsLimit: Int { sync.syncsLimit ?? 30 }
+    static var dashboardCacheSeconds: TimeInterval { sync.dashboardCacheSeconds ?? 60 }
+    static var recentWorkouts: Int { sync.recentWorkouts ?? 5 }
+    static var sleepTargetMinutes: Int { CatalogStore.cached?.battery?.sleepTargetMinutes ?? 480 }
+    static var shortRetentionDays: Int { sync.shortRetentionDays ?? 7 }
+
+    /// Metrics whose raw samples only live for a few days. Taken from the catalog so the
+    /// coverage list stays true after a retention change on the server.
+    static var shortRetentionKeys: Set<String> {
+        guard let quantities = CatalogStore.cached?.quantities else {
+            return ["heartRate", "runningSpeed", "walkingSpeed"]
+        }
+        return Set(quantities.filter { $0.retention == "short" }.map(\.key))
     }
 }
 

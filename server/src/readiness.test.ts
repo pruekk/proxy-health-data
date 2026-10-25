@@ -173,3 +173,19 @@ describe('sleep is scored on time asleep', () => {
     expect(result.factors.find((f) => f.key === 'sleep')?.note).toBeUndefined()
   })
 })
+
+describe('change against the baseline', () => {
+  test('each factor reports the gap as a percentage', () => {
+    const result = computeReadiness(realDay)
+    const by = Object.fromEntries(result.factors.map((f) => [f.key, f.changePercent]))
+    expect(by.hrv).toBe(-19) // 50.9 against 62.5
+    expect(by.restingHeartRate).toBe(12) // 67 against 59.965
+    expect(by.sleep).toBe(-18) // 394 minutes against the 480 target
+    expect(by.load).toBe(93) // 58 against 30.066
+  })
+
+  test('a factor sitting on its baseline reports zero', () => {
+    const result = computeReadiness({ ...realDay, hrv: { latest: 62, baseline: 62 } })
+    expect(result.factors.find((f) => f.key === 'hrv')?.changePercent).toBe(0)
+  })
+})

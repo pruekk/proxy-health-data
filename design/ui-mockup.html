@@ -132,8 +132,8 @@
   }
   .primary svg{width:17px;height:17px}
   .pull{text-align:center;font-size:11.5px;color:#b0b0b5;padding:2px 0 8px}
-  .readiness .rhead{display:flex;align-items:center;justify-content:space-between}
-  .readiness .info{width:19px;height:19px;border-radius:50%;background:#f0f0f3;color:#8a8a8e;
+  .rhead{display:flex;align-items:center;justify-content:space-between}
+  .info{width:19px;height:19px;border-radius:50%;background:#f0f0f3;color:#8a8a8e;
     font:700 11px/19px ui-serif,Georgia,serif;text-align:center}
   .readiness .rbody{display:flex;align-items:center;gap:16px;margin-top:16px}
   .readiness .rdial{flex:none}
@@ -149,6 +149,7 @@
   .factors .fv{font-size:12.5px;font-weight:600;text-align:right;white-space:nowrap;
     font-variant-numeric:tabular-nums}
   .factors .fv em{font-style:normal;font-weight:500;color:#b0b0b5;font-size:11.5px;margin-left:3px}
+  .factors .fv i{font-style:normal;font-weight:500;color:#b0b0b5}
   .sheet-dim{position:absolute;inset:0;background:rgba(0,0,0,.28)}
   .sheet{position:absolute;left:0;right:0;bottom:0;height:88%;background:#fff;
     border-radius:26px 26px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.18);display:flex;flex-direction:column}
@@ -173,6 +174,14 @@
   .bands td:nth-child(2){width:72px;font-weight:600}
   .bands td:last-child{color:var(--muted)}
   .bands tr:last-child td{border-bottom:0}
+  .compare td:first-child{width:auto;padding-right:12px}
+  .compare td:first-child b{display:block;font-weight:700}
+  .compare td:first-child i{display:block;font-style:normal;font-size:10.5px;color:#b0b0b5;
+    font-weight:400;line-height:1.4;margin-top:2px}
+  .compare td:last-child{width:86px;white-space:nowrap;vertical-align:middle}
+  .formula td:first-child{width:118px;font-weight:600}
+  .formula td:last-child{text-align:left;color:var(--muted);font-weight:400}
+  .compare td:last-child{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
   .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px}
   .secnote{margin:-4px 2px 10px;font-size:12px;line-height:1.5;color:var(--muted)}
   .alertbox{position:absolute;left:36px;right:36px;top:168px;background:rgba(252,252,253,.97);
@@ -184,6 +193,24 @@
   .alert-actions span{flex:1;padding:12px 0;font-size:15px;color:var(--brand-blue);font-weight:500}
   .alert-actions span:first-child{border-right:1px solid #e2e2e7}
   .alert-actions .danger{color:#d0352b;font-weight:600}
+  .battery{margin-top:12px}
+  .batwrap{display:flex;align-items:center;gap:3px;margin-top:16px}
+  .bat{position:relative;flex:1;height:58px;border-radius:14px;background:#f0f0f3;
+    border:2px solid #e2e2e7;overflow:hidden}
+  .batfill{position:absolute;inset:0;right:auto;border-radius:11px;
+    background:linear-gradient(180deg,#9fe06a,#6fc93a)}
+  .batpct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:1px;
+    font-size:25px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.22);
+    font-variant-numeric:tabular-nums}
+  .batpct small{font-size:25px;font-weight:700}
+  .batcap{width:5px;height:20px;border-radius:0 3px 3px 0;background:#e2e2e7}
+  .batstats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .batstats .bs{border-radius:13px;padding:11px 13px;background:#f6f6f8}
+  .batstats b{display:block;font-size:19px;letter-spacing:-.01em;background:none}
+  .batstats .charge b{color:#1f9d55}
+  .batstats .drain b{color:#d0352b}
+  .batstats span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
+  .batsay{margin:12px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
   .hidden{display:none}
 </style>
 </head>
@@ -238,17 +265,37 @@
       <div class="factors">
         <div class="f"><span class="fn">HRV</span>
           <span class="fb"><b style="width:23%;background:#f2544b"></b></span>
-          <span class="fv">47.2 ms <em>(62.1)</em></span></div>
-        <div class="f"><span class="fn">ชีพจรพัก</span>
+          <span class="fv">47.2 ms <em>(−24%)</em></span></div>
+        <div class="f"><span class="fn">RHR</span>
           <span class="fb"><b style="width:45%;background:#8ed24a"></b></span>
-          <span class="fv">61 bpm <em>(60.1)</em></span></div>
-        <div class="f"><span class="fn">หลับจริง<em>บนเตียง 7:09</em></span>
-          <span class="fb"><b style="width:76%;background:#e8a33d"></b></span>
-          <span class="fv">5:04 <em>(8:00)</em></span></div>
-        <div class="f"><span class="fn">โหลด 7 วัน</span>
+          <span class="fv">61 bpm <em>(+2%)</em></span></div>
+        <div class="f"><span class="fn">Sleep</span>
+          <span class="fb"><b style="width:63%;background:#e8a33d"></b></span>
+          <span class="fv">5:04<i>/7:09</i> <em>(−18%)</em></span></div>
+        <div class="f"><span class="fn">Load</span>
           <span class="fb"><b style="width:100%;background:#8ed24a"></b></span>
-          <span class="fv">36 นาที <em>(30)</em></span></div>
+          <span class="fv">36 นาที <em>(+20%)</em></span></div>
       </div>
+    </div>
+
+
+    <div class="card battery">
+      <div class="rhead">
+        <span class="label">พลังงานร่างกาย</span>
+        <span class="info">i</span>
+      </div>
+      <div class="batwrap">
+        <div class="bat">
+          <div class="batfill" style="width:68%"></div>
+          <span class="batpct">68<small>%</small></span>
+        </div>
+        <div class="batcap"></div>
+      </div>
+      <div class="batstats">
+        <div class="bs charge"><b>+70%</b><span>ชาร์จเมื่อคืน</span></div>
+        <div class="bs drain"><b>−38%</b><span>ใช้ไปวันนี้</span></div>
+      </div>
+      <p class="batsay">สูงกว่าปกติของเวลานี้ 6% — ยังมีพอสำหรับซ้อมเบาช่วงเย็น</p>
     </div>
 
     <div class="card">
@@ -509,6 +556,20 @@
       </div>
       <p class="fine">HRV กับชีพจรพักจับความเหนื่อยสะสมได้เร็วที่สุด การนอนถ่วงหนักเท่า HRV เพราะคืนเดียวเปลี่ยนวันถัดไปได้ทั้งวัน ส่วนโหลดเป็นบริบท ไม่ใช่อาการ เลยถ่วงน้อยสุด</p>
 
+      <div class="label" style="margin-top:20px">เทียบกับอะไร</div>
+      <table class="bands compare">
+        <tr><td><b>HRV</b><i>ความแปรปรวนจังหวะหัวใจ · สูง = ฟื้นตัวดี<br>เทียบค่าเฉลี่ย 90 วันของคุณ</i></td>
+            <td>62.1 ms</td></tr>
+        <tr><td><b>RHR</b><i>ชีพจรขณะพัก · ต่ำ = ฟื้นตัวดี<br>เทียบค่าเฉลี่ย 90 วันของคุณ</i></td>
+            <td>60.1 bpm</td></tr>
+        <tr><td><b>Sleep</b><i>เวลาที่หลับจริง ไม่ใช่เวลาบนเตียง<br>เทียบเป้าหมายคงที่</i></td>
+            <td>8:00</td></tr>
+        <tr><td><b>Load</b><i>ปริมาณการซ้อม · นาทีออกกำลังเฉลี่ยต่อวัน<br>เทียบค่าเฉลี่ย 90 วันของคุณ</i></td>
+            <td>30 นาที/วัน</td></tr>
+      </table>
+      <p class="fine"><b>Sleep</b> คิดจาก<b>เวลาที่หลับจริง</b> ไม่ใช่เวลาที่อยู่บนเตียง — สองค่านี้ต่างกันปกติ 1–2 ชั่วโมง การ์ดแสดงเวลาบนเตียงกำกับไว้ด้วยเพื่อให้เทียบกับที่จำได้</p>
+      <p class="fine"><b>Load</b> คือสัดส่วนนาทีออกกำลังเฉลี่ย 7 วันล่าสุด ต่อค่าเฉลี่ย 90 วัน (acute:chronic ratio) ช่วง 0.8–1.3 เท่าได้คะแนนเต็ม สูงกว่านั้นคือซ้อมพุ่งเร็วเกินตัว ต่ำกว่าคือซ้อมน้อยลง ซึ่งหักคะแนนเบากว่า</p>
+
       <div class="label" style="margin-top:20px">ระดับคะแนน</div>
       <table class="bands">
         <tr><td><span class="dot" style="background:#f2544b"></span>0–34</td><td>พักฟื้น</td><td>ควรพัก หรือขยับเบา ๆ เท่านั้น</td></tr>
@@ -520,7 +581,18 @@
       <div class="label" style="margin-top:20px">เมื่อข้อมูลไม่ครบ</div>
       <p class="fine">คิดจากปัจจัยที่มี แล้วเฉลี่ยน้ำหนักใหม่ตามสัดส่วนเดิม เช่นถ้าไม่มีการนอน อีก 3 ตัวจะถูกปรับจาก 30/25/15 เป็น 43/36/21 — ต้องมีอย่างน้อย 2 ใน 4 ไม่งั้นจะไม่แสดงคะแนน</p>
 
-      <div class="label" style="margin-top:20px">ข้อจำกัด</div>
+      <div class="label" style="margin-top:22px">พลังงานร่างกาย คำนวณยังไง</div>
+      <p class="fine">ตื่นนอนได้พลังงานจากการนอน จากนั้นลดลงตามกิจกรรมและชีพจรที่สูงกว่าค่าพัก และเพิ่มขึ้นช่วงที่ร่างกายได้พัก ยกยอดข้ามวัน ไม่รีเซ็ตทุกเช้า</p>
+      <table class="bands formula">
+        <tr><td>ชาร์จจากการนอน</td><td>หลับ 8 ชม. = +55 · หลับ 5 ชม. = +34</td></tr>
+        <tr><td>ใช้พื้นฐาน</td><td>−2 ต่อชั่วโมงที่ตื่น</td></tr>
+        <tr><td>ใช้จากกิจกรรม</td><td>แคลอรีแอคทีฟ ÷ 20 · วิ่ง 600 kcal = −30</td></tr>
+        <tr><td>ใช้จากชีพจรสูง</td><td>(ชีพจรเฉลี่ย − ชีพจรพัก − 15) ÷ 10 ต่อชั่วโมง</td></tr>
+        <tr><td>ชาร์จตอนพัก</td><td>+2 ต่อชั่วโมงที่ชีพจรใกล้ค่าพักและแทบไม่ขยับ</td></tr>
+      </table>
+      <p class="fine">Garmin ใช้ HRV แบบจังหวะต่อจังหวะตลอดวันซึ่ง Apple Watch ไม่เปิดให้เข้าถึง ของเราจึงประมาณจากชีพจรเทียบค่าพักและแคลอรีแทน ตัวเลขจะไม่ตรงกับ Body Battery ของ Garmin</p>
+
+      <div class="label" style="margin-top:22px">ข้อจำกัด</div>
       <ul class="fine limits">
         <li>ไม่มีมาตรฐานกลางสำหรับคะแนนแบบนี้ Whoop, Garmin, Oura ใช้สูตรต่างกันและไม่เปิดเผย น้ำหนักข้างบนเป็นการเลือกของเรา</li>
         <li>ค่าฐานต้องมีข้อมูลอย่างน้อย 2 วันถึงจะคำนวณได้ ช่วงแรกที่เพิ่งเริ่มใช้จะยังไม่นิ่ง</li>

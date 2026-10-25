@@ -29,8 +29,13 @@ export interface Factor {
   baseline?: number
   /** How far from the baseline, in the unit a reader cares about. */
   deviation?: string
+  /** The same gap as a percentage, which is what the card shows in brackets. */
+  changePercent?: number
   /** Extra context for the row; sleep uses it for time in bed. */
   note?: string
+  /** Shown next to the value in a lighter colour: sleep puts time in bed here, so the card
+   *  reads "5:04/7:09" without needing to know what the note means. */
+  secondary?: string
   direction: 'good' | 'watch' | 'bad'
 }
 
@@ -45,6 +50,7 @@ const SLEEP_TARGET_MINUTES = 480
 /** Below two factors the number would be more noise than signal. */
 const MINIMUM_FACTORS = 2
 
+const clock = (minutes: number) => `${Math.floor(minutes / 60)}:${String(Math.round(minutes % 60)).padStart(2, '0')}`
 const clamp = (value: number) => Math.max(0, Math.min(100, value))
 const round = (value: number, places = 1) => Number(value.toFixed(places))
 
@@ -64,6 +70,7 @@ export function computeReadiness(inputs: ReadinessInputs) {
       value: round(inputs.hrv.latest),
       baseline: round(inputs.hrv.baseline),
       deviation: `${percent >= 0 ? '+' : '−'}${Math.abs(round(percent, 0))}%`,
+      changePercent: round(percent, 0),
       direction: percent >= -5 ? 'good' : percent >= -15 ? 'watch' : 'bad',
     })
   } else {
@@ -80,6 +87,7 @@ export function computeReadiness(inputs: ReadinessInputs) {
       value: round(inputs.restingHeartRate.latest, 0),
       baseline: round(inputs.restingHeartRate.baseline),
       deviation: `${delta >= 0 ? '+' : '−'}${Math.abs(round(delta, 0))} bpm`,
+      changePercent: round((delta / inputs.restingHeartRate.baseline) * 100, 0),
       direction: delta <= 2 ? 'good' : delta <= 5 ? 'watch' : 'bad',
     })
   } else {
@@ -99,10 +107,12 @@ export function computeReadiness(inputs: ReadinessInputs) {
       deviation: `${Math.floor(inputs.sleepMinutes / 60)}:${String(Math.round(inputs.sleepMinutes % 60)).padStart(2, '0')}`,
       // Scored on time asleep — the recovery signal — while the remembered figure is usually
       // time in bed, so the gap is shown rather than left to look like an error.
+      changePercent: round((ratio - 1) * 100, 0),
       note:
         inputs.inBedMinutes !== undefined
-          ? `บนเตียง ${Math.floor(inputs.inBedMinutes / 60)}:${String(Math.round(inputs.inBedMinutes % 60)).padStart(2, '0')}`
+          ? `บนเตียง ${clock(inputs.inBedMinutes)}`
           : undefined,
+      secondary: inputs.inBedMinutes !== undefined ? clock(inputs.inBedMinutes) : undefined,
       direction: ratio >= 0.9 ? 'good' : ratio >= 0.75 ? 'watch' : 'bad',
     })
   } else {
@@ -121,6 +131,7 @@ export function computeReadiness(inputs: ReadinessInputs) {
       value: round(inputs.load.acute, 0),
       baseline: round(inputs.load.chronic, 0),
       deviation: `${round(ratio, 2)}×`,
+      changePercent: round((ratio - 1) * 100, 0),
       direction: ratio <= 1.3 ? 'good' : ratio <= 1.6 ? 'watch' : 'bad',
     })
   } else {

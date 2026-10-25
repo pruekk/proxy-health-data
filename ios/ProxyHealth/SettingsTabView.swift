@@ -104,9 +104,9 @@ struct SettingsTabView: View {
                     get: { dashboard.retentionYears },
                     set: { years in if years != dashboard.retentionYears { pendingRetention = years } }
                 )) {
-                    Text("1 ปี").tag(1)
-                    Text("2 ปี").tag(2)
-                    Text("5 ปี").tag(5)
+                    ForEach(AppConfig.display.retentionOptions, id: \.self) { years in
+                        Text("\(years) ปี").tag(years)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .padding(.top, 10)

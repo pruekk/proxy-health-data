@@ -3,6 +3,7 @@
 
 import { catalog } from './catalog'
 import { parseDateKeys, parseRange } from './dates'
+import { computeBattery } from './battery'
 import { computeReadiness } from './readiness'
 import {
   BadRequest,
@@ -11,6 +12,7 @@ import {
   getWorkout,
   latestDailyValues,
   listMetrics,
+  collectBatteryInputs,
   collectReadinessInputs,
   queryDaily,
   queryHourly,
@@ -453,6 +455,14 @@ const tools: Tool[] = [
       'A 0-100 score for whether the user is recovered enough to train hard today, with the factors behind it: heart rate variability and resting heart rate against their own 90-day baselines, last night\'s sleep, and the ratio of the last week\'s training load to the long-run average. Returns the band (พักฟื้น / ระวัง / พร้อม / พร้อมมาก), a deterministic one-line summary, and which factors were unavailable. Baselines are personal, not population norms, and the score is null when fewer than two factors have data.',
     inputSchema: { type: 'object', properties: {} },
     run: async (uid) => computeReadiness(await collectReadinessInputs(uid)),
+  },
+  {
+    name: 'get_body_battery',
+    title: 'Body battery',
+    description:
+      'How much energy is left right now, 0-100, with how much last night returned and how much today has cost. Charges with sleep and quiet hours, drains with activity and a heart rate above resting, and carries over rather than resetting at midnight. Approximated from heart rate and burned energy — Apple Watch does not expose the beat-to-beat HRV that Garmin\'s version uses — so it is not comparable with a Garmin reading. Use get_training_readiness for whether to train hard today; this is for what is left in the tank.',
+    inputSchema: { type: 'object', properties: {} },
+    run: async (uid) => computeBattery(await collectBatteryInputs(uid)),
   },
   {
     name: 'get_cardio_fitness',

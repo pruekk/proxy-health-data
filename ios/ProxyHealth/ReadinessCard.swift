@@ -80,15 +80,14 @@ struct ReadinessCard: View {
         .frame(width: 106, height: 106)
     }
 
+    /// Short label, bar, then the value with its change against your own normal. Targets and
+    /// baselines live in the ⓘ sheet; four numbers on one line was too much to read at a glance.
     private func row(_ factor: ReadinessDoc.Factor) -> some View {
         HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(factor.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary)
-                if let note = factor.note {
-                    Text(note).font(.system(size: 10)).foregroundStyle(.tertiary)
-                }
-            }
-            .frame(width: 70, alignment: .leading)
+            Text(factor.name)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 44, alignment: .leading)
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Brand.track)
@@ -97,38 +96,27 @@ struct ReadinessCard: View {
                 }
             }
             .frame(height: 6)
-            // One rule down the column: the measured value, then your own normal in brackets.
-            // The deviation is carried by the bar's length and colour instead.
-            HStack(spacing: 4) {
+            HStack(spacing: 0) {
                 Text(measuredText(factor)).font(.system(size: 12.5, weight: .semibold)).monospacedDigit()
-                if let baseline = baselineText(factor) {
-                    Text("(\(baseline))").font(.system(size: 11.5)).foregroundStyle(.tertiary)
+                // Sleep shows time in bed next to time asleep, since that is the number people
+                // remember; it is greyed because only the first one is scored.
+                if let secondary = factor.secondary {
+                    Text("/\(secondary)").font(.system(size: 12.5, weight: .medium)).foregroundStyle(.tertiary).monospacedDigit()
+                }
+                if let change = changeText(factor) {
+                    Text(" (\(change))").font(.system(size: 11.5, weight: .medium)).foregroundStyle(.tertiary)
                 }
             }
-            .frame(width: 108, alignment: .trailing)
+            .frame(width: 130, alignment: .trailing)
         }
     }
 
-    /// Sleep's baseline is a target in minutes; showing "ฐาน 480" next to "6:04" reads as two
-    /// different quantities, so it is formatted the same way as the value.
-    private func baselineText(_ factor: ReadinessDoc.Factor) -> String? {
-        guard let baseline = factor.baseline else { return nil }
-        if factor.key == "sleep" { return clock(baseline) }
-        return baseline.formatted(baseline < 100 ? 1 : 0)
+    private func changeText(_ factor: ReadinessDoc.Factor) -> String? {
+        ReadinessFormat.change(percent: factor.changePercent)
     }
 
     private func measuredText(_ factor: ReadinessDoc.Factor) -> String {
-        switch factor.key {
-        case "hrv": "\(factor.value.formatted(1)) ms"
-        case "restingHeartRate": "\(factor.value.formatted(0)) bpm"
-        case "sleep": clock(factor.value)
-        case "load": "\(factor.value.formatted(0)) นาที"
-        default: factor.value.formatted(1)
-        }
-    }
-
-    private func clock(_ minutes: Double) -> String {
-        "\(Int(minutes) / 60):\(String(format: "%02d", Int(minutes) % 60))"
+        ReadinessFormat.value(key: factor.key, value: factor.value)
     }
 
     private var bandColor: Color {

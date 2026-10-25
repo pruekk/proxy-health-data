@@ -102,17 +102,22 @@ struct ReadinessDoc: Codable, Sendable {
         var value: Double
         var baseline: Double?
         var deviation: String?
+        /// The gap from the baseline as a percentage, shown in brackets after the value.
+        var changePercent: Double?
         /// Context that is not the comparison — sleep uses it for time in bed.
         var note: String?
+        /// Rendered right after the value in a lighter colour, as in "5:04/7:09".
+        var secondary: String?
         var direction: String
 
         var id: String { key }
+        /// Short labels, so the four rows line up and the ⓘ sheet carries the Thai meaning.
         var name: String {
             switch key {
             case "hrv": "HRV"
-            case "restingHeartRate": "ชีพจรพัก"
-            case "sleep": "หลับจริง"
-            case "load": "โหลด 7 วัน"
+            case "restingHeartRate": "RHR"
+            case "sleep": "Sleep"
+            case "load": "Load"
             default: key
             }
         }
@@ -138,10 +143,10 @@ struct ReadinessDoc: Codable, Sendable {
         reason: "กำลังคำนวณความพร้อมจากข้อมูลล่าสุด",
         headline: "กำลังคำนวณความพร้อมจากข้อมูลล่าสุด",
         factors: [
-            .init(key: "hrv", score: 60, value: 60, baseline: 60, deviation: "—", note: nil, direction: "good"),
-            .init(key: "restingHeartRate", score: 60, value: 60, baseline: 60, deviation: "—", note: nil, direction: "good"),
-            .init(key: "sleep", score: 60, value: 420, baseline: 480, deviation: "—", note: nil, direction: "good"),
-            .init(key: "load", score: 60, value: 30, baseline: 30, deviation: "—", note: nil, direction: "good"),
+            .init(key: "hrv", score: 60, value: 60, baseline: 60, deviation: "—", direction: "good"),
+            .init(key: "restingHeartRate", score: 60, value: 60, baseline: 60, deviation: "—", direction: "good"),
+            .init(key: "sleep", score: 60, value: 420, baseline: 480, deviation: "—", direction: "good"),
+            .init(key: "load", score: 60, value: 30, baseline: 30, deviation: "—", direction: "good"),
         ],
         missing: [],
         basis: " "
@@ -180,4 +185,31 @@ struct RetentionProgress: Sendable {
         if done >= total { return "ปรับข้อมูลเดิมเสร็จแล้ว · \(stamped) รายการ" }
         return "กำลังปรับข้อมูลเดิม \(done)/\(total) ประเภท · \(stamped) รายการ"
     }
+}
+
+struct BatteryDoc: Codable, Sendable {
+    struct Step: Codable, Sendable, Identifiable {
+        var hour: Int
+        var level: Double
+        var change: Double
+
+        var id: Int { hour }
+    }
+
+    var level: Int
+    var chargedOvernight: Int
+    var drainedToday: Int
+    var afterSleep: Int
+    var steps: [Step]
+    var missing: [String]
+    /// The coaching sentence, comparison included when there is enough history for one.
+    var message: String?
+    var advice: String?
+    var basis: String?
+
+    /// Placeholder for the loading state, shown redacted and colourless.
+    static let placeholder = BatteryDoc(
+        level: 70, chargedOvernight: 50, drainedToday: 30, afterSleep: 90, steps: [], missing: [],
+        message: "กำลังคำนวณพลังงานที่เหลือ", advice: nil, basis: nil
+    )
 }

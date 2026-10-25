@@ -10,6 +10,7 @@ import type {
   WorkoutInput,
 } from './schemas'
 import { catalog } from './catalog'
+import { computeBattery, type BatteryInputs } from './battery'
 import type { ReadinessInputs } from './readiness'
 
 // Firestore layout
@@ -344,6 +345,77 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
     sleepMinutes,
     inBedMinutes,
     load,
+  }
+}
+
+/**
+ * Inputs for the body battery: last night's sleep, the resting pulse it is measured against, and
+ * today's hourly energy and heart rate since waking.
+ */
+/** Days of hourly history used for the "usual at this hour" comparison. */
+const BATTERY_HISTORY_DAYS = 7
+
+export async function collectBatteryInputs(uid: string): Promise<BatteryInputs> {
+  const timeZone = String((await getProfile(uid)).timeZone ?? 'UTC')
+  const now = new Date()
+  const key = (date: Date) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+  const today = key(now)
+
+  const historyFrom = key(new Date(now.getTime() - BATTERY_HISTORY_DAYS * 86_400_000))
+  const [hourly, series, nights] = await Promise.all([
+    queryHourly(uid, historyFrom, today, ['activeEnergyBurned', 'heartRate']),
+    dailySeries(uid, key(new Date(now.getTime() - 30 * 86_400_000)), today, ['restingHeartRate']),
+    querySleep(uid, { from: new Date(now.getTime() - (BATTERY_HISTORY_DAYS + 1) * 86_400_000), to: now }, timeZone),
+  ])
+
+  const lastNight = nights
+    .filter((n): n is typeof n & { date: string } => typeof n.date === 'string')
+    .sort((a, b) => b.date.localeCompare(a.date))[0]
+  const restingSeries = (series.restingHeartRate ?? []).map((p) => p.avg).filter((v): v is number => typeof v === 'number')
+
+  // Hours since waking. Before any sleep is known, the whole day counts.
+  const wokeAt = lastNight?.wakeTime ? new Date(String(lastNight.wakeTime)) : undefined
+  const firstHour = wokeAt && key(wokeAt) === today ? Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hour12: false }).format(wokeAt)) : 0
+
+  const hoursOf = (day: { metrics?: unknown } | undefined, from: number) => {
+    const metrics = (day?.metrics ?? {}) as Record<string, Record<string, { sum?: number; avg?: number }>>
+    const hours: BatteryInputs['hours'] = []
+    for (let hour = from; hour <= 23; hour += 1) {
+      const energy = metrics.activeEnergyBurned?.[hour]?.sum
+      const heartRate = metrics.heartRate?.[hour]?.avg
+      if (energy === undefined && heartRate === undefined) continue
+      hours.push({ hour, activeEnergyKcal: energy, heartRate })
+    }
+    return hours
+  }
+
+  const byDate = new Map(hourly.map((day) => [String((day as { date?: string }).date), day]))
+  const sleepByDate = new Map(
+    nights
+      .filter((n): n is typeof n & { date: string } => typeof n.date === 'string')
+      .map((n) => [n.date, typeof n.asleepMinutes === 'number' ? n.asleepMinutes : undefined]),
+  )
+  const restingHeartRate = restingSeries.length ? restingSeries[restingSeries.length - 1] : undefined
+
+  // "Usual at this hour" is the same simulation run over the previous days, cut off at the
+  // current hour, so the comparison is like-for-like rather than against a whole-day average.
+  const hourNow = Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hour12: false }).format(now))
+  const past: number[] = []
+  for (let back = 1; back <= BATTERY_HISTORY_DAYS; back += 1) {
+    const date = key(new Date(now.getTime() - back * 86_400_000))
+    const day = byDate.get(date)
+    if (!day) continue
+    const hours = hoursOf(day, 0).filter((h) => h.hour <= hourNow)
+    if (!hours.length) continue
+    past.push(computeBattery({ sleepMinutes: sleepByDate.get(date), restingHeartRate, hours }).level)
+  }
+
+  return {
+    sleepMinutes: typeof lastNight?.asleepMinutes === 'number' ? lastNight.asleepMinutes : undefined,
+    restingHeartRate,
+    hours: hoursOf(byDate.get(today), firstHour),
+    usualAtThisHour: past.length ? past.reduce((sum, level) => sum + level, 0) / past.length : undefined,
   }
 }
 

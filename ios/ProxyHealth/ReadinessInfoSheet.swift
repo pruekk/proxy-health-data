@@ -3,6 +3,9 @@ import SwiftUI
 /// What the readiness score is made of. Lives behind the ⓘ rather than on the card, but the
 /// caveat matters: a score of 53 means nothing next to someone else's 53.
 struct ReadinessInfoSheet: View {
+    enum Section { case readiness, battery }
+
+    var section: Section = .readiness
     @Environment(\.dismiss) private var dismiss
 
     private struct Weight: Identifiable {
@@ -12,12 +15,36 @@ struct ReadinessInfoSheet: View {
         var id: String { name }
     }
 
+    // Same abbreviations as the card, with the Thai meaning underneath, so the row labels are
+    // never a guess.
     private let weights = [
-        Weight(name: "HRV", unit: "ms — ยิ่งสูงยิ่งฟื้นตัวดี", percent: 30),
-        Weight(name: "การนอน", unit: "ชั่วโมง:นาที ที่หลับจริง", percent: 30),
-        Weight(name: "ชีพจรพัก", unit: "bpm — ยิ่งต่ำยิ่งดี", percent: 25),
-        Weight(name: "โหลด 7 วัน", unit: "นาทีออกกำลังเฉลี่ยต่อวัน", percent: 15),
+        Weight(name: "HRV", unit: "ความแปรปรวนจังหวะหัวใจ", percent: 30),
+        Weight(name: "Sleep", unit: "เวลาที่หลับจริง", percent: 30),
+        Weight(name: "RHR", unit: "ชีพจรขณะพัก", percent: 25),
+        Weight(name: "Load", unit: "โหลดการซ้อม 7 วัน", percent: 15),
     ]
+
+    private struct Glossary: Identifiable {
+        let name: String
+        let meaning: String
+        let against: String
+        let target: String
+        var id: String { name }
+    }
+
+    private var glossary: [Glossary] {
+        let target = AppConfig.sleepTargetMinutes
+        return [
+            .init(name: "HRV", meaning: "ความแปรปรวนจังหวะหัวใจ · สูง = ฟื้นตัวดี",
+                  against: "เทียบค่าเฉลี่ย 90 วันของคุณ", target: "ค่าฐานของคุณเอง"),
+            .init(name: "RHR", meaning: "ชีพจรขณะพัก · ต่ำ = ฟื้นตัวดี",
+                  against: "เทียบค่าเฉลี่ย 90 วันของคุณ", target: "ค่าฐานของคุณเอง"),
+            .init(name: "Sleep", meaning: "เวลาที่หลับจริง ไม่ใช่เวลาบนเตียง",
+                  against: "เทียบเป้าหมายคงที่", target: "\(target / 60):\(String(format: "%02d", target % 60))"),
+            .init(name: "Load", meaning: "นาทีออกกำลังเฉลี่ยต่อวัน",
+                  against: "เทียบค่าเฉลี่ย 90 วันของคุณ", target: "ค่าฐานของคุณเอง"),
+        ]
+    }
 
     private let bands = [
         ("0–34", "พักฟื้น", "ควรพัก หรือขยับเบา ๆ เท่านั้น", Color.red),
@@ -30,6 +57,50 @@ struct ReadinessInfoSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    if section == .battery { batteryContent } else { readinessContent }
+                }
+                .padding(.horizontal, 22)
+                .padding(.bottom, 40)
+            }
+            .navigationTitle(section == .battery ? "วิธีคำนวณพลังงานร่างกาย" : "วิธีคำนวณความพร้อมซ้อม")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("เสร็จ") { dismiss() } } }
+        }
+    }
+
+    private var batteryContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("พลังงานที่เหลืออยู่ตอนนี้ 0–100 ชาร์จจากการนอนและช่วงที่ได้พัก ลดลงตามกิจกรรมและชีพจรที่สูงกว่าค่าพัก ยกยอดข้ามวัน ไม่รีเซ็ตทุกเช้า")
+                .font(.system(size: 13.5)).lineSpacing(3).foregroundStyle(.secondary)
+
+            section("คิดยังไง")
+            VStack(alignment: .leading, spacing: 9) {
+                formulaRow("ชาร์จจากการนอน", "หลับ 8 ชม. = +55 · หลับ 5 ชม. = +34")
+                formulaRow("ใช้พื้นฐาน", "−2 ต่อชั่วโมงที่ตื่น")
+                formulaRow("ใช้จากกิจกรรม", "แคลอรีแอคทีฟ ÷ 20 · วิ่ง 600 kcal = −30")
+                formulaRow("ใช้จากชีพจรสูง", "(ชีพจรเฉลี่ย − ชีพจรพัก − 15) ÷ 10 ต่อชั่วโมง")
+                formulaRow("ชาร์จตอนพัก", "+2 ต่อชั่วโมงที่ชีพจรใกล้ค่าพักและแทบไม่ขยับ")
+            }
+
+            section("ข้อจำกัด")
+            VStack(alignment: .leading, spacing: 7) {
+                bullet("Garmin ใช้ HRV แบบจังหวะต่อจังหวะตลอดวัน ซึ่ง Apple Watch ไม่เปิดให้เข้าถึง ของเราจึงประมาณจากชีพจรเทียบค่าพักและแคลอรีแทน ตัวเลขจะไม่ตรงกับ Body Battery ของ Garmin")
+                bullet("ข้อมูลรายชั่วโมงเริ่มเก็บเมื่อไม่นานมานี้ ช่วงแรกการเทียบกับ \"ปกติของเวลานี้\" จะยังไม่นิ่ง")
+                bullet("ไม่ใช่คำแนะนำทางการแพทย์")
+            }
+        }
+    }
+
+    private func formulaRow(_ name: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(name).font(.system(size: 12.5, weight: .semibold)).frame(width: 118, alignment: .leading)
+            Text(detail).font(.system(size: 12.5)).foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var readinessContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
                     Text("คะแนน 0–100 จาก 4 ปัจจัย เทียบกับค่าฐาน 90 วันของคุณเอง ไม่ใช่ค่ามาตรฐานประชากร — เลข 53 ของคุณกับของคนอื่นจึงเทียบกันไม่ได้")
                         .font(.system(size: 13.5))
                         .lineSpacing(3)
@@ -61,6 +132,30 @@ struct ReadinessInfoSheet: View {
                     Text("HRV กับชีพจรพักจับความเหนื่อยสะสมได้เร็วที่สุด การนอนถ่วงหนักเท่า HRV เพราะคืนเดียวเปลี่ยนวันถัดไปได้ทั้งวัน ส่วนโหลดเป็นบริบท ไม่ใช่อาการ เลยถ่วงน้อยสุด")
                         .font(.system(size: 12)).lineSpacing(3).foregroundStyle(.secondary).padding(.top, 12)
 
+                    section("เทียบกับอะไร")
+                    VStack(spacing: 0) {
+                        ForEach(glossary) { item in
+                            HStack(alignment: .top, spacing: 10) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.name).font(.system(size: 12.5, weight: .semibold))
+                                    Text(item.meaning).font(.system(size: 11)).foregroundStyle(.secondary)
+                                    Text(item.against).font(.system(size: 11)).foregroundStyle(.tertiary)
+                                }
+                                Spacer(minLength: 8)
+                                Text(item.target)
+                                    .font(.system(size: 12.5, weight: .medium)).monospacedDigit()
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            .padding(.vertical, 9)
+                            if item.id != glossary.last?.id { Divider() }
+                        }
+                    }
+                    Text("Sleep คิดจากเวลาที่หลับจริง ไม่ใช่เวลาที่อยู่บนเตียง สองค่านี้ต่างกันปกติ 1–2 ชั่วโมง การ์ดจึงแสดง หลับจริง/บนเตียง คู่กัน")
+                        .font(.system(size: 12)).lineSpacing(3).foregroundStyle(.secondary).padding(.top, 12)
+                    Text("Load คือสัดส่วนนาทีออกกำลังเฉลี่ย 7 วันล่าสุด ต่อค่าเฉลี่ย 90 วัน (acute:chronic ratio) ช่วง 0.8–1.3 เท่าได้คะแนนเต็ม สูงกว่านั้นคือซ้อมพุ่งเร็วเกินตัว ต่ำกว่าคือซ้อมน้อยลง ซึ่งหักคะแนนเบากว่า")
+                        .font(.system(size: 12)).lineSpacing(3).foregroundStyle(.secondary).padding(.top, 8)
+
                     section("ระดับคะแนน")
                     VStack(spacing: 0) {
                         ForEach(bands, id: \.0) { range, label, advice, color in
@@ -88,13 +183,6 @@ struct ReadinessInfoSheet: View {
                         bullet("ค่าฐานต้องมีข้อมูลอย่างน้อย 2 วันถึงจะคำนวณได้ ช่วงแรกที่เพิ่งเริ่มใช้จะยังไม่นิ่ง")
                         bullet("ไม่ใช่คำแนะนำทางการแพทย์")
                     }
-                }
-                .padding(.horizontal, 22)
-                .padding(.bottom, 40)
-            }
-            .navigationTitle("วิธีคำนวณความพร้อมซ้อม")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("เสร็จ") { dismiss() } } }
         }
     }
 

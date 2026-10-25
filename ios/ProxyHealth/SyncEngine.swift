@@ -43,8 +43,8 @@ actor SyncEngine {
     private var observersStarted = false
     private var activeObservers: [HKObserverQuery] = []
 
-    private static let pageSize = 2000
-    private static let uploadChunk = 2000
+    private static var pageSize: Int { AppConfig.pageSize }
+    private static var uploadChunk: Int { AppConfig.uploadChunk }
     /// Workouts examined per sync for the raw-detail backfill, so a first run stays bounded.
     func shouldSkipBackgroundSync() -> Bool {
         guard SyncState.syncOnlyWhileCharging else { return false }
@@ -57,7 +57,7 @@ actor SyncEngine {
     }
 
     /// Minimum gap between automatic syncs.
-    private static let cooldownSeconds: TimeInterval = 120
+    private static var cooldownSeconds: TimeInterval { AppConfig.cooldownSeconds }
     private static var workoutDetailLimit: Int { CatalogStore.cached?.sync?.workoutDetailLimit ?? 40 }
     private static var recoveryTailSeconds: TimeInterval { CatalogStore.cached?.sync?.recoveryTailSeconds ?? 600 }
 

@@ -17,6 +17,11 @@ struct LatestView: View {
                     // had been removed.
                     ReadinessCard(readiness: .placeholder, placeholder: true).redacted(reason: .placeholder)
                 }
+                if let battery = dashboard.battery {
+                    BatteryCard(battery: battery)
+                } else if dashboard.isLoading || dashboard.loadedAt == nil {
+                    BatteryCard(battery: .placeholder, placeholder: true).redacted(reason: .placeholder)
+                }
                 rings
                 todayTiles
                 heart
@@ -110,22 +115,18 @@ struct LatestView: View {
         }
     }
 
+    /// Rows, names and units come from the server catalog, so a new body metric appears with a
+    /// deploy instead of a rebuild.
     private var body_: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "ร่างกาย", hint: bodyMeasuredHint)
             Card(vertical: 3) {
                 VStack(spacing: 0) {
-                    row("bodyMass", "scalemass", "น้ำหนัก", unit: "kg", decimals: 1)
-                    Divider()
-                    row("height", "figure.stand", "ส่วนสูง", unit: "m", decimals: 2)
-                    Divider()
-                    row("bodyMassIndex", "circle.dashed", "BMI", unit: nil, decimals: 1)
-                    Divider()
-                    row("bodyFatPercentage", "drop", "ไขมัน", unit: "%", decimals: 1, scale: 100)
-                    Divider()
-                    row("leanBodyMass", "figure.arms.open", "มวลไร้ไขมัน", unit: "kg", decimals: 1)
-                    Divider()
-                    row("waistCircumference", "ruler", "รอบเอว", unit: "cm", decimals: 1)
+                    let rows = AppConfig.display.body
+                    ForEach(rows) { item in
+                        row(item)
+                        if item.id != rows.last?.id { Divider() }
+                    }
                 }
             }
         }
@@ -136,7 +137,10 @@ struct LatestView: View {
         return "วัดล่าสุด \(at.relativeThai)"
     }
 
-    private func row(_ type: String, _ symbol: String, _ title: String, unit: String?, decimals: Int, scale: Double = 1) -> some View {
+    private func row(_ item: RemoteCatalog.Row) -> some View {
+        let type = item.key
+        let scale = item.scale ?? 1
+        let decimals = item.decimals ?? 1
         let metric = dashboard.metric(type)
         let value = metric?.value.map { ($0 * scale).formatted(decimals) } ?? "—"
         var detail: String?
@@ -158,28 +162,37 @@ struct LatestView: View {
         } else if let at = metric?.measuredAt {
             subtitle = "วัดเมื่อ \(at.relativeThai)"
         }
-        return MetricRow(symbol: symbol, title: title, subtitle: subtitle,
-                         value: unit == nil ? value : "\(value) \(unit!)", detail: detail, detailStyle: style)
+        return MetricRow(symbol: item.symbol ?? "circle.dashed", title: item.name, subtitle: subtitle,
+                         value: item.unit.map { "\(value) \($0)" } ?? value, detail: detail, detailStyle: style)
     }
 
+    /// Two tiles per line, in catalog order.
     private var heart: some View {
-        VStack(spacing: 0) {
+        let tiles = AppConfig.display.vitals
+        return VStack(spacing: 0) {
             SectionTitle(text: "หัวใจและการหายใจ")
-            HStack(spacing: 12) {
-                Tile(label: "HRV", value: (dashboard.metric("heartRateVariabilitySDNN")?.value ?? 0).formatted(1), unit: "ms",
-                     meta: dashboard.average("heartRateVariabilitySDNN", lastDays: 30).map { "เฉลี่ย 30 วัน \($0.formatted(1))" })
-                Tile(label: "หายใจ", value: (dashboard.metric("respiratoryRate")?.value ?? 0).formatted(1), unit: "/นาที")
+            ForEach(Array(stride(from: 0, to: tiles.count, by: 2)), id: \.self) { index in
+                HStack(spacing: 12) {
+                    tile(tiles[index])
+                    if index + 1 < tiles.count { tile(tiles[index + 1]) } else { Color.clear.frame(height: 0) }
+                }
+                .padding(.top, index == 0 ? 0 : 12)
             }
-            HStack(spacing: 12) {
-                Tile(label: "ชีพจรตอนเดิน", value: (dashboard.metric("walkingHeartRateAverage")?.value ?? 0).formatted(0), unit: "bpm")
-                Tile(label: "ออกซิเจน", value: dashboard.metric("oxygenSaturation")?.value.map { ($0 * 100).formatted(0) } ?? "—", unit: "%")
-            }
-            .padding(.top, 12)
         }
     }
 
-    /// The five most recent sessions. Five rather than three because several runs can land on
-    /// the same day, and one row would then hide the rest.
+    private func tile(_ item: RemoteCatalog.Row) -> some View {
+        let scale = item.scale ?? 1
+        let decimals = item.decimals ?? 1
+        let value = dashboard.metric(item.key)?.value.map { ($0 * scale).formatted(decimals) } ?? "—"
+        let meta = item.averageDays.flatMap { days in
+            dashboard.average(item.key, lastDays: days).map { "เฉลี่ย \(days) วัน \(($0 * scale).formatted(decimals))" }
+        }
+        return Tile(label: item.name, value: value, unit: item.unit, meta: meta)
+    }
+
+    /// The most recent sessions. More than a couple because several runs can land on the same
+    /// day, and one row would then hide the rest; the count comes from the catalog.
     private var workouts: some View {
         Group {
             if !dashboard.workouts.isEmpty {
@@ -187,7 +200,7 @@ struct LatestView: View {
                     SectionTitle(text: "ออกกำลังกายล่าสุด")
                     Card(vertical: 3) {
                         VStack(spacing: 0) {
-                            let recent = Array(dashboard.workouts.prefix(5))
+                            let recent = Array(dashboard.workouts.prefix(AppConfig.recentWorkouts))
                             ForEach(recent) { workout in
                                 MetricRow(
                                     symbol: "figure.run",
