@@ -243,6 +243,32 @@ check "reports sleep as missing" "1" "$(echo "$R" | python3 -c 'import sys,json;
 check "says the baseline is personal" "1" "$(echo "$R" | grep -ci 'ไม่ใช่ค่ามาตรฐานประชากร')"
 check "REST route agrees with the tool" "$SCORE" "$(curl -s $B/v1/readiness -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)["score"])')"
 
+echo "15. readiness uses last night, not the oldest night in the window"
+python3 - "$B" "$EST_TOKEN" <<'PY2'
+import json, sys, urllib.request
+from datetime import datetime, timedelta, timezone
+base, token = sys.argv[1], sys.argv[2]
+def post(payload):
+    req = urllib.request.Request(base + "/v1/sync", data=json.dumps(payload).encode(),
+        headers={"content-type": "application/json", "authorization": "Bearer " + token})
+    urllib.request.urlopen(req)
+now = datetime.now(timezone.utc)
+def night(start, minutes, tag):
+    return {"id": "sleep-%s-0000-0000-000000000000" % tag, "type": "sleepAnalysis", "kind": "category",
+            "value": 3, "valueLabel": "asleepCore", "startDate": start.isoformat(),
+            "endDate": (start + timedelta(minutes=minutes)).isoformat()}
+# a long night two days ago, a shorter one last night, and a stub older still
+post({"timeZone": "UTC", "samples": [
+    night(now - timedelta(days=2, hours=8), 480, "old"),
+    night(now - timedelta(hours=9), 400, "last"),
+    night(now - timedelta(days=3, hours=2), 34, "frag"),
+]})
+print("  seeded 3 nights: 480, 400 (last night) and a 34-minute fragment")
+PY2
+R=$(call_est get_training_readiness '{}')
+check "picks last night" "400" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="sleep"];print(f[0]["value"] if f else "none")')"
+check "not the fragment" "1" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="sleep"];print(0 if f and f[0]["value"] == 34 else 1)')"
+
 echo
 echo "passed: $pass  failed: $fail"
 [ "$fail" -eq 0 ]

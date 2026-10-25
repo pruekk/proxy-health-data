@@ -66,6 +66,12 @@ heart-rate sample ever recorded. Each workout is fetched once (`SyncState.workou
 After the first sync, anchors and background delivery keep everything current on their own — there is
 nothing to re-run for new data.
 
+Each sync recomputes daily and hourly aggregates only for the metrics that actually changed, which
+it learns from the anchored queries (those run even for aggregate-only metrics — they are local and
+cheap). Recomputing all 36 cost six to ten seconds of statistics queries on every sync, however
+little had happened. Samples recorded during a workout are tagged as they are uploaded rather than
+re-sent by the per-workout pass, and the server commits batches in parallel.
+
 ## Firestore layout
 
 ```
@@ -156,6 +162,12 @@ metric in the catalog:
   window would erase it for good.
 
 Everything else — sleep, daily and hourly aggregates, workouts — follows the single value.
+
+Cumulative metrics (`raw: false` in the catalog: steps, distance, energy, exercise and stand
+minutes, flights, daylight) upload no individual samples at all. Each one is an increment like
+"7 steps at 01:23:45" that no tool reads, and a 12 km run produced thousands of them. They are
+carried by the hourly and daily aggregates, which the phone computes with the same statistics
+query and which are already de-duplicated across iPhone, Watch and third-party sources.
 
 Expiry is written per document at ingest and swept by Firestore TTL policies on `expiresAt`, so
 nothing runs on a schedule. Two consequences worth knowing: TTL deletes within about 24 hours of

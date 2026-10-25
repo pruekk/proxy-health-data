@@ -6,6 +6,7 @@ struct ContentView: View {
     @Environment(AppModel.self) private var model
     @State private var dashboard = Dashboard()
     @State private var tab: AppTab = .latest
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -21,6 +22,16 @@ struct ContentView: View {
             FloatingTabBar(selection: $tab).padding(.bottom, 6)
         }
         .background(Brand.ground)
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, model.isAuthorized, model.settings.isConfigured else { return }
+            Task {
+                await model.syncNow(trigger: .foreground)
+                // Nothing used to refresh the screen after a sync, so the numbers stayed stale
+                // until the next pull-to-refresh.
+                dashboard.refreshLocalSyncs()
+                await dashboard.load(settings: model.settings, force: true)
+            }
+        }
         .overlay(alignment: .top) {
             if let error = model.errorMessage {
                 Text(error)

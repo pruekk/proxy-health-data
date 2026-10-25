@@ -26,6 +26,12 @@ interface QuantityMetric {
   retention?: Retention
   /** Worth an hourly bucket: the shape of the day is informative for these. */
   hourly?: boolean
+  /**
+   * Whether individual samples are uploaded. Cumulative metrics arrive as tiny increments —
+   * "7 steps at 01:23:45" — which no tool reads and which cost thousands of writes per workout.
+   * They are synced as hourly and daily aggregates instead, already de-duplicated on the phone.
+   */
+  raw?: boolean
 }
 
 interface CategoryMetric {
@@ -45,17 +51,17 @@ const q = (
 
 const quantities: QuantityMetric[] = [
   // Activity
-  q('stepCount', 'HKQuantityTypeIdentifierStepCount', 'count', 'cumulative', { hourly: true }),
-  q('distanceWalkingRunning', 'HKQuantityTypeIdentifierDistanceWalkingRunning', 'm', 'cumulative', { hourly: true }),
-  q('distanceCycling', 'HKQuantityTypeIdentifierDistanceCycling', 'm', 'cumulative'),
-  q('distanceSwimming', 'HKQuantityTypeIdentifierDistanceSwimming', 'm', 'cumulative'),
-  q('flightsClimbed', 'HKQuantityTypeIdentifierFlightsClimbed', 'count', 'cumulative'),
-  q('activeEnergyBurned', 'HKQuantityTypeIdentifierActiveEnergyBurned', 'kcal', 'cumulative', { hourly: true }),
-  q('basalEnergyBurned', 'HKQuantityTypeIdentifierBasalEnergyBurned', 'kcal', 'cumulative'),
-  q('appleExerciseTime', 'HKQuantityTypeIdentifierAppleExerciseTime', 'min', 'cumulative'),
-  q('appleStandTime', 'HKQuantityTypeIdentifierAppleStandTime', 'min', 'cumulative'),
-  q('appleMoveTime', 'HKQuantityTypeIdentifierAppleMoveTime', 'min', 'cumulative'),
-  q('timeInDaylight', 'HKQuantityTypeIdentifierTimeInDaylight', 'min', 'cumulative'),
+  q('stepCount', 'HKQuantityTypeIdentifierStepCount', 'count', 'cumulative', { raw: false, hourly: true }),
+  q('distanceWalkingRunning', 'HKQuantityTypeIdentifierDistanceWalkingRunning', 'm', 'cumulative', { raw: false, hourly: true }),
+  q('distanceCycling', 'HKQuantityTypeIdentifierDistanceCycling', 'm', 'cumulative', { raw: false, hourly: true }),
+  q('distanceSwimming', 'HKQuantityTypeIdentifierDistanceSwimming', 'm', 'cumulative', { raw: false, hourly: true }),
+  q('flightsClimbed', 'HKQuantityTypeIdentifierFlightsClimbed', 'count', 'cumulative', { raw: false, hourly: true }),
+  q('activeEnergyBurned', 'HKQuantityTypeIdentifierActiveEnergyBurned', 'kcal', 'cumulative', { raw: false, hourly: true }),
+  q('basalEnergyBurned', 'HKQuantityTypeIdentifierBasalEnergyBurned', 'kcal', 'cumulative', { raw: false, hourly: true }),
+  q('appleExerciseTime', 'HKQuantityTypeIdentifierAppleExerciseTime', 'min', 'cumulative', { raw: false, hourly: true }),
+  q('appleStandTime', 'HKQuantityTypeIdentifierAppleStandTime', 'min', 'cumulative', { raw: false, hourly: true }),
+  q('appleMoveTime', 'HKQuantityTypeIdentifierAppleMoveTime', 'min', 'cumulative', { raw: false, hourly: true }),
+  q('timeInDaylight', 'HKQuantityTypeIdentifierTimeInDaylight', 'min', 'cumulative', { raw: false, hourly: true }),
   // Heart and lungs
   q('heartRate', 'HKQuantityTypeIdentifierHeartRate', 'count/min', 'discrete', { retention: 'short', hourly: true }),
   q('restingHeartRate', 'HKQuantityTypeIdentifierRestingHeartRate', 'count/min', 'discrete', { backfill: 'extended' }),

@@ -109,3 +109,42 @@ public enum SyncMerge {
             .filter { seen.insert(Int(timestamp($0).timeIntervalSince1970.rounded())).inserted }
     }
 }
+
+/// Half-open time windows, used to tell whether a sample was recorded during a workout.
+public struct TimeWindows: Sendable {
+    private let windows: [(from: Date, to: Date)]
+
+    public init(_ windows: [(from: Date, to: Date)]) {
+        self.windows = windows.sorted { $0.from < $1.from }
+    }
+
+    public var isEmpty: Bool { windows.isEmpty }
+
+    /// Binary search rather than a scan: this runs once per sample, and a run can produce
+    /// thousands of them.
+    public func contains(_ date: Date) -> Bool {
+        var low = 0
+        var high = windows.count - 1
+        while low <= high {
+            let mid = (low + high) / 2
+            let window = windows[mid]
+            if date < window.from {
+                high = mid - 1
+            } else if date > window.to {
+                low = mid + 1
+            } else {
+                return true
+            }
+        }
+        return false
+    }
+}
+
+/// Which metrics need their daily and hourly aggregates recomputed.
+public enum Recompute {
+    /// Only the metrics that actually gained or lost samples. Recomputing all of them cost six
+    /// to ten seconds of statistics queries on every sync, however little had changed.
+    public static func metrics(all: [String], changed: Set<String>, backfilling: Bool) -> [String] {
+        backfilling ? all : all.filter { changed.contains($0) }
+    }
+}

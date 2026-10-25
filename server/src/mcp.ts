@@ -1,6 +1,7 @@
 // Minimal stateless MCP server (Streamable HTTP transport, JSON responses).
 // Spec: https://modelcontextprotocol.io/specification — supports initialize, ping, tools/list, tools/call.
 
+import { catalog } from './catalog'
 import { parseDateKeys, parseRange } from './dates'
 import { computeReadiness } from './readiness'
 import {
@@ -55,6 +56,10 @@ const dayRange = {
 
 
 // ---------- derived metrics ----------
+
+/** Metrics with no raw samples any more: their current value lives in the daily aggregate. */
+const AGGREGATE_ONLY = new Set(catalog.quantities.filter((q) => q.raw === false).map((q) => q.key))
+const HOURLY_METRICS = catalog.quantities.filter((q) => q.hourly).map((q) => q.key)
 
 const BODY_METRICS = ['bodyMass', 'height', 'bodyMassIndex', 'bodyFatPercentage', 'leanBodyMass', 'waistCircumference']
 const CARDIO_METRICS = ['vo2Max', 'restingHeartRate', 'heartRateVariabilitySDNN', 'heartRateRecoveryOneMinute', 'walkingHeartRateAverage']
@@ -203,7 +208,7 @@ const tools: Tool[] = [
     name: 'get_hourly_pattern',
     title: 'Hourly pattern',
     description:
-      'Per-hour values for a metric across a date range — the shape of the day. Use for "when do I move", "what time does my heart rate settle", or comparing one week against another. Covers a far longer span than get_samples because the buckets are pre-aggregated on the phone (and de-duplicated across iPhone, Watch and other sources). Available for stepCount, heartRate, activeEnergyBurned and distanceWalkingRunning.',
+      `Per-hour values for a metric across a date range — the shape of the day. Use for "when do I move", "what time does my heart rate settle", or comparing one week against another. Covers a far longer span than get_samples because the buckets are pre-aggregated on the phone (and de-duplicated across iPhone, Watch and other sources). Available for: ${HOURLY_METRICS.join(', ')}.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -222,7 +227,7 @@ const tools: Tool[] = [
     name: 'get_samples',
     title: 'Raw samples',
     description:
-      'Raw HealthKit samples for one metric in a time range, newest first. Use for intraday detail (e.g. heart rate during an afternoon). Use list_metrics for valid `type` keys.',
+      `Raw HealthKit samples for one metric in a time range, newest first. Use for intraday detail (e.g. heart rate during an afternoon). Use list_metrics for valid \`type\` keys. Cumulative metrics (${[...AGGREGATE_ONLY].join(', ')}) have no raw samples — each one would be a meaningless increment like "7 steps at 01:23" — so read those with get_hourly_pattern or get_daily_summaries instead.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -295,7 +300,12 @@ const tools: Tool[] = [
       const [metrics, daily] = await Promise.all([listMetrics(uid, types), latestDailyValues(uid, types)])
 
       const values = metrics.map((metric) => {
-        const { type, latest, unit } = metric as { type: string; latest: Record<string, unknown> | null; unit?: string }
+        const { type, unit } = metric as { type: string; unit?: string }
+        // An aggregate-only metric keeps whatever raw sample it had before the switch; using it
+        // would freeze the value at that day for good.
+        const latest = AGGREGATE_ONLY.has(type)
+          ? null
+          : ((metric as { latest: Record<string, unknown> | null }).latest)
         return {
           type,
           value: latest?.value ?? null,

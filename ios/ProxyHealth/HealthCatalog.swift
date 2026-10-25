@@ -25,6 +25,9 @@ struct QuantityMetric: @unchecked Sendable {
     let unit: HKUnit
     let aggregation: Aggregation
     var backfill: Backfill = .standard
+    /// Cumulative metrics arrive as tiny increments that no tool reads; they are carried by the
+    /// hourly and daily aggregates instead of thousands of individual documents.
+    var uploadsRaw = true
 
     var type: HKQuantityType { HKQuantityType(identifier) }
 }
@@ -52,17 +55,17 @@ enum HealthCatalog {
     /// Built-in copy, used until the server catalog has been fetched at least once.
     static let quantities: [QuantityMetric] = [
         // Activity (Apple Fitness rings and movement)
-        .init(key: "stepCount", identifier: .stepCount, unit: .count(), aggregation: .cumulative),
-        .init(key: "distanceWalkingRunning", identifier: .distanceWalkingRunning, unit: .meter(), aggregation: .cumulative),
-        .init(key: "distanceCycling", identifier: .distanceCycling, unit: .meter(), aggregation: .cumulative),
-        .init(key: "distanceSwimming", identifier: .distanceSwimming, unit: .meter(), aggregation: .cumulative),
-        .init(key: "flightsClimbed", identifier: .flightsClimbed, unit: .count(), aggregation: .cumulative),
-        .init(key: "activeEnergyBurned", identifier: .activeEnergyBurned, unit: .kilocalorie(), aggregation: .cumulative),
-        .init(key: "basalEnergyBurned", identifier: .basalEnergyBurned, unit: .kilocalorie(), aggregation: .cumulative),
-        .init(key: "appleExerciseTime", identifier: .appleExerciseTime, unit: .minute(), aggregation: .cumulative),
-        .init(key: "appleStandTime", identifier: .appleStandTime, unit: .minute(), aggregation: .cumulative),
-        .init(key: "appleMoveTime", identifier: .appleMoveTime, unit: .minute(), aggregation: .cumulative),
-        .init(key: "timeInDaylight", identifier: .timeInDaylight, unit: .minute(), aggregation: .cumulative),
+        .init(key: "stepCount", identifier: .stepCount, unit: .count(), aggregation: .cumulative, uploadsRaw: false),
+        .init(key: "distanceWalkingRunning", identifier: .distanceWalkingRunning, unit: .meter(), aggregation: .cumulative, uploadsRaw: false),
+        .init(key: "distanceCycling", identifier: .distanceCycling, unit: .meter(), aggregation: .cumulative, uploadsRaw: false),
+        .init(key: "distanceSwimming", identifier: .distanceSwimming, unit: .meter(), aggregation: .cumulative, uploadsRaw: false),
+        .init(key: "flightsClimbed", identifier: .flightsClimbed, unit: .count(), aggregation: .cumulative, uploadsRaw: false),
+        .init(key: "activeEnergyBurned", identifier: .activeEnergyBurned, unit: .kilocalorie(), aggregation: .cumulative, uploadsRaw: false),
+        .init(key: "basalEnergyBurned", identifier: .basalEnergyBurned, unit: .kilocalorie(), aggregation: .cumulative, uploadsRaw: false),
+        .init(key: "appleExerciseTime", identifier: .appleExerciseTime, unit: .minute(), aggregation: .cumulative, uploadsRaw: false),
+        .init(key: "appleStandTime", identifier: .appleStandTime, unit: .minute(), aggregation: .cumulative, uploadsRaw: false),
+        .init(key: "appleMoveTime", identifier: .appleMoveTime, unit: .minute(), aggregation: .cumulative, uploadsRaw: false),
+        .init(key: "timeInDaylight", identifier: .timeInDaylight, unit: .minute(), aggregation: .cumulative, uploadsRaw: false),
         // Heart and lungs
         .init(key: "heartRate", identifier: .heartRate, unit: bpm, aggregation: .discrete),
         .init(key: "restingHeartRate", identifier: .restingHeartRate, unit: bpm, aggregation: .discrete, backfill: .extended),
@@ -142,6 +145,20 @@ enum HealthCatalog {
             return ["stepCount", "heartRate", "activeEnergyBurned", "distanceWalkingRunning"].contains(key)
         }
         return remote.quantities.first { $0.key == key }?.hourly == true
+    }
+
+    /// Built-in fallback mirrors the catalog: cumulative types are aggregate-only.
+    static let aggregateOnlyKeys: Set<String> = [
+        "stepCount", "distanceWalkingRunning", "distanceCycling", "distanceSwimming",
+        "flightsClimbed", "activeEnergyBurned", "basalEnergyBurned", "appleExerciseTime",
+        "appleStandTime", "appleMoveTime", "timeInDaylight",
+    ]
+
+    /// Whether a metric is one of the per-workout detail types, and so worth tagging when the
+    /// sample falls inside a session.
+    static func isWorkoutDetail(_ key: String) -> Bool {
+        let keys = CatalogStore.cached?.workoutDetailMetrics ?? ["heartRate", "runningSpeed", "cyclingSpeed"]
+        return keys.contains(key)
     }
 
     /// Metrics pulled per workout for after-the-fact review: heart rate and pace.

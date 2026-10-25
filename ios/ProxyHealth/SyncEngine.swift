@@ -107,20 +107,35 @@ actor SyncEngine {
         let catalog = HealthCatalog.effective
         for skipped in catalog.skipped { report.errors.append("catalog: skipped \(skipped)") }
 
+        // Workout windows up front, so samples recorded during a session are tagged as they are
+        // uploaded. Without this the per-workout pass has to send the same samples a second time
+        // purely to mark them, which is what made a 12 km run upload twice.
+        let windows = (try? await workoutWindows(settings: settings)) ?? TimeWindows([])
+        var changed: Set<String> = []
+
         for metric in catalog.quantities {
             do {
                 SyncState.applyBackfillPolicy(metric.backfill, for: metric.key)
+                // Aggregate-only metrics still run the anchored query — it is local and cheap, and
+                // it is how we learn the metric changed — but nothing is uploaded.
+                let tagWorkouts = HealthCatalog.isWorkoutDetail(metric.key) && !windows.isEmpty
                 let (added, deleted) = try await drain(
                     key: metric.key,
                     predicate: .quantitySample(type: metric.type, predicate: Self.since(Self.start(metric.backfill, settings))),
-                    client: client
-                ) { samples, deleted in
-                    SyncRequest(
-                        samples: samples.map { Self.payload($0, metric: metric) },
-                        deletedSamples: deleted.isEmpty ? nil : [DeletedSamples(type: metric.key, ids: deleted)]
-                    )
-                }
-                report.samples += added
+                    client: client,
+                    makeRequest: metric.uploadsRaw ? { samples, deleted in
+                        SyncRequest(
+                            samples: samples.map { sample in
+                                var payload = Self.payload(sample, metric: metric)
+                                if tagWorkouts, windows.contains(sample.startDate) { payload.context = "workout" }
+                                return payload
+                            },
+                            deletedSamples: deleted.isEmpty ? nil : [DeletedSamples(type: metric.key, ids: deleted)]
+                        )
+                    } : nil
+                )
+                if added + deleted > 0 { changed.insert(metric.key) }
+                report.samples += metric.uploadsRaw ? added : 0
                 report.deletedSamples += deleted
                 if added + deleted > 0 { progress("\(metric.key): \(added) new, \(deleted) deleted") }
             } catch {
@@ -141,6 +156,7 @@ actor SyncEngine {
                         deletedSamples: deleted.isEmpty ? nil : [DeletedSamples(type: metric.key, ids: deleted)]
                     )
                 }
+                if added + deleted > 0 { changed.insert(metric.key) }
                 report.samples += added
                 report.deletedSamples += deleted
                 if added + deleted > 0 { progress("\(metric.key): \(added) new, \(deleted) deleted") }
@@ -171,7 +187,7 @@ actor SyncEngine {
         // Hourly buckets for the few metrics where the shape of the day matters. Only the last
         // few days are recomputed: older hours never change once the samples have landed.
         do {
-            let hours = try await syncHourly(client: client, report: &report)
+            let hours = try await syncHourly(client: client, changed: changed, report: &report)
             if hours > 0 { progress("hourly buckets: \(hours) วัน") }
         } catch {
             report.errors.append("hourly: \(error.localizedDescription)")
@@ -181,7 +197,7 @@ actor SyncEngine {
         // can deliver samples late. The first sync backfills the full window.
         let days = SyncState.dailyBackfillDone ? 3 : settings.dailyBackfillDays
         do {
-            report.days = try await syncDaily(days: days, client: client, report: &report)
+            report.days = try await syncDaily(days: days, client: client, changed: changed, report: &report)
             progress("daily summaries: \(report.days) days")
             if report.errors.isEmpty { SyncState.dailyBackfillDone = true }
         } catch {
@@ -231,7 +247,17 @@ actor SyncEngine {
             sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
             limit: Self.workoutDetailLimit
         )
-        let workouts = try await query.result(for: store).filter { !SyncState.workoutDetailDone($0.uuid.uuidString) }
+        // Sessions inside the raw window were tagged during the main pass; fetching them again
+        // would upload the same thousands of samples twice.
+        let rawWindowStart = Self.start(.standard, settings)
+        let workouts = try await query.result(for: store).filter { workout in
+            guard !SyncState.workoutDetailDone(workout.uuid.uuidString) else { return false }
+            if workout.startDate >= rawWindowStart {
+                SyncState.markWorkoutDetailDone(workout.uuid.uuidString)
+                return false
+            }
+            return true
+        }
         guard !workouts.isEmpty else { return 0 }
 
         var done = 0
@@ -320,11 +346,13 @@ actor SyncEngine {
 
     /// Pages through an anchored query, uploading each page before saving the new anchor,
     /// so an upload failure is retried on the next sync.
+    /// `makeRequest` of nil advances the anchor without uploading: used by aggregate-only
+    /// metrics, where the query still tells us something changed.
     private func drain<S: HKSample>(
         key: String,
         predicate: HKSamplePredicate<S>,
         client: APIClient,
-        makeRequest: ([S], [String]) -> SyncRequest
+        makeRequest: (([S], [String]) -> SyncRequest)?
     ) async throws -> (added: Int, deleted: Int) {
         var anchor = SyncState.anchor(for: key)
         var added = 0
@@ -333,7 +361,7 @@ actor SyncEngine {
             let query = HKAnchoredObjectQueryDescriptor(predicates: [predicate], anchor: anchor, limit: Self.pageSize)
             let result = try await query.result(for: store)
             let deletedIds = result.deletedObjects.map(\.uuid.uuidString)
-            if !result.addedSamples.isEmpty || !deletedIds.isEmpty {
+            if let makeRequest, !result.addedSamples.isEmpty || !deletedIds.isEmpty {
                 try await client.sync(makeRequest(result.addedSamples, deletedIds))
             }
             SyncState.setAnchor(result.newAnchor, for: key)
@@ -345,10 +373,27 @@ actor SyncEngine {
         return (added, deleted)
     }
 
+    /// Workout time spans inside the raw window, padded by the recovery tail. Samples that land
+    /// in one are tagged on their way up, so the per-workout pass has nothing left to re-send
+    /// for recent sessions.
+    private func workoutWindows(settings: SyncSettings) async throws -> TimeWindows {
+        let since = Self.start(.standard, settings)
+        let workouts = try await HKSampleQueryDescriptor(
+            predicates: [.workout(Self.since(since))],
+            sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
+            limit: Self.workoutDetailLimit
+        ).result(for: store)
+        return TimeWindows(workouts.map {
+            ($0.startDate, $0.endDate.addingTimeInterval(Self.recoveryTailSeconds))
+        })
+    }
+
     /// Uploads per-hour statistics for the metrics flagged `hourly` in the catalog. One document
     /// per day on the server holds all 24 slots, so a year costs 365 documents.
-    private func syncHourly(client: APIClient, report: inout SyncReport) async throws -> Int {
-        let metrics = HealthCatalog.effective.quantities.filter { HealthCatalog.isHourly($0.key) }
+    private func syncHourly(client: APIClient, changed: Set<String>, report: inout SyncReport) async throws -> Int {
+        let hourly = HealthCatalog.effective.quantities.filter { HealthCatalog.isHourly($0.key) }
+        let wanted = Set(Recompute.metrics(all: hourly.map(\.key), changed: changed, backfilling: !SyncState.dailyBackfillDone))
+        let metrics = hourly.filter { wanted.contains($0.key) }
         guard !metrics.isEmpty else { return 0 }
 
         let calendar = Calendar.current
@@ -394,13 +439,17 @@ actor SyncEngine {
         return Set(stats.map(\.date)).count
     }
 
-    private func syncDaily(days: Int, client: APIClient, report: inout SyncReport) async throws -> Int {
+    private func syncDaily(days: Int, client: APIClient, changed: Set<String>, report: inout SyncReport) async throws -> Int {
         let calendar = Calendar.current
         let end = Date()
         let start = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -(days - 1), to: end)!)
 
+        // Recomputing all 36 metrics took six to ten seconds of statistics queries on every
+        // sync, however little had changed.
+        let all = HealthCatalog.effective.quantities
+        let wanted = Set(Recompute.metrics(all: all.map(\.key), changed: changed, backfilling: !SyncState.dailyBackfillDone))
         var stats: [DailyStatPayload] = []
-        for metric in HealthCatalog.effective.quantities {
+        for metric in all where wanted.contains(metric.key) {
             do {
                 stats += try await dailyStats(metric, from: start, to: end)
             } catch {

@@ -40,11 +40,25 @@ const SHORT_RETENTION = new Set(catalog.quantities.filter((q) => q.retention ===
 
 type Op = (batch: WriteBatch) => void
 
+/**
+ * Commits in parallel rather than one batch at a time. A 12 km run uploads ~12,000 documents,
+ * which is 28 batches; waiting for each round trip in turn was most of a 52-second sync.
+ * Concurrency is bounded so a large upload cannot swamp the instance.
+ */
+const COMMIT_CONCURRENCY = 6
+
 async function commit(ops: Op[]) {
-  for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
-    const batch = db.batch()
-    for (const op of ops.slice(i, i + BATCH_LIMIT)) op(batch)
-    await batch.commit()
+  const batches: Op[][] = []
+  for (let i = 0; i < ops.length; i += BATCH_LIMIT) batches.push(ops.slice(i, i + BATCH_LIMIT))
+
+  for (let i = 0; i < batches.length; i += COMMIT_CONCURRENCY) {
+    await Promise.all(
+      batches.slice(i, i + COMMIT_CONCURRENCY).map((group) => {
+        const batch = db.batch()
+        for (const op of group) op(batch)
+        return batch.commit()
+      }),
+    )
   }
 }
 
@@ -308,9 +322,18 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
       }
     : undefined
 
-  // Last night only: readiness is about today.
-  const nights = await querySleep(uid, { from: new Date(today.getTime() - 2 * 86_400_000), to: today }, timeZone)
-  const lastNight = nights[nights.length - 1]
+  // Last night only: readiness is about today. querySleep returns newest first, and the oldest
+  // entry in the window is usually a night cut in half by the window's start — taking it gave a
+  // 34-minute "night" and a wrecked score.
+  const nights = await querySleep(
+    uid,
+    // Reach back far enough that last night's bedtime is inside the window, like get_sleep does.
+    { from: new Date(today.getTime() - 2 * 86_400_000 - 18 * 3_600_000), to: today },
+    timeZone,
+  )
+  const lastNight = nights
+    .filter((n): n is typeof n & { date: string } => typeof n.date === 'string')
+    .sort((a, b) => b.date.localeCompare(a.date))[0]
   const sleepMinutes = typeof lastNight?.asleepMinutes === 'number' ? lastNight.asleepMinutes : undefined
 
   return {
@@ -599,6 +622,8 @@ export async function latestDailyValues(uid: string, types?: string[], lookbackD
 const ASLEEP = new Set(['asleepUnspecified', 'asleepCore', 'asleepDeep', 'asleepREM'])
 
 // Groups sleepAnalysis samples into nights (keyed by the local date the sleep ended).
+// Returns NEWEST FIRST — the opposite of dailySeries and queryDaily, which run oldest first.
+// Taking `[length - 1]` here means the oldest night, which is usually one the window cut in half.
 // When several sources recorded the same night (Watch, iPhone, third-party), the source
 // with the most asleep time is reported so stages are not double counted.
 export async function querySleep(uid: string, range: Range, timeZone: string) {

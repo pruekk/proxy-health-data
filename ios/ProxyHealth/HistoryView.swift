@@ -175,7 +175,8 @@ struct HistoryView: View {
             ("bodyMass", "น้ำหนักและองค์ประกอบร่างกาย", "scalemass"),
             ("vo2Max", "VO₂ max", "chart.line.uptrend.xyaxis"),
         ]
-        let shortWindow = ["heartRate", "runningSpeed", "walkingSpeed", "sleepAnalysis"]
+        // Only the high-frequency types are on the short window; sleep keeps the full retention.
+        let shortWindow = ["heartRate", "runningSpeed", "walkingSpeed"]
         return shown.compactMap { type, name, symbol in
             guard let metric = dashboard.metric(type) else { return nil }
             let kept = shortWindow.contains(type) ? "เก็บ 7 วัน" : "เก็บ \(dashboard.retentionYears) ปี"

@@ -17,10 +17,8 @@ struct ProxyHealthApp: App {
             ContentView()
                 .environment(model)
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active, model.isAuthorized, model.settings.isConfigured {
-                Task { await model.syncNow(trigger: .foreground) }
-            }
-        }
+        // The sync is triggered from ContentView, which also holds the dashboard and can
+        // refresh the screen once the sync finishes.
+        .environment(\.scenePhase, scenePhase)
     }
 }

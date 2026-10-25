@@ -100,3 +100,61 @@ final class SyncMergeTests: XCTestCase {
         XCTAssertTrue(SyncMerge.dedupedByTimestamp([Entry]()) { $0.at }.isEmpty)
     }
 }
+
+final class TimeWindowsTests: XCTestCase {
+    private func date(_ iso: String) -> Date { ISODate.parse(iso)! }
+
+    private var run: TimeWindows {
+        TimeWindows([
+            (date("2026-10-25T00:14:00Z"), date("2026-10-25T02:07:00Z")),
+            (date("2026-10-22T00:14:00Z"), date("2026-10-22T01:04:00Z")),
+        ])
+    }
+
+    func testInsideAWorkout() {
+        XCTAssertTrue(run.contains(date("2026-10-25T01:00:00Z")))
+        XCTAssertTrue(run.contains(date("2026-10-22T00:30:00Z")))
+    }
+
+    func testOutsideEveryWorkout() {
+        XCTAssertFalse(run.contains(date("2026-10-24T12:00:00Z")))
+        XCTAssertFalse(run.contains(date("2026-10-25T03:00:00Z")))
+    }
+
+    func testBoundariesCount() {
+        XCTAssertTrue(run.contains(date("2026-10-25T00:14:00Z")))
+        XCTAssertTrue(run.contains(date("2026-10-25T02:07:00Z")))
+    }
+
+    func testEmptySetMatchesNothing() {
+        let none = TimeWindows([])
+        XCTAssertTrue(none.isEmpty)
+        XCTAssertFalse(none.contains(date("2026-10-25T01:00:00Z")))
+    }
+
+    func testUnsortedInputStillWorks() {
+        // The caller passes workouts newest-first; the search needs them ordered.
+        XCTAssertTrue(run.contains(date("2026-10-22T00:20:00Z")))
+    }
+}
+
+final class RecomputeTests: XCTestCase {
+    private let all = ["stepCount", "heartRate", "bodyMass", "sleepAnalysis"]
+
+    func testOnlyChangedMetrics() {
+        let result = Recompute.metrics(all: all, changed: ["heartRate", "stepCount"], backfilling: false)
+        XCTAssertEqual(result, ["stepCount", "heartRate"], "keeps the catalog's order")
+    }
+
+    func testNothingChangedMeansNoWork() {
+        XCTAssertTrue(Recompute.metrics(all: all, changed: [], backfilling: false).isEmpty)
+    }
+
+    func testBackfillRecomputesEverything() {
+        XCTAssertEqual(Recompute.metrics(all: all, changed: [], backfilling: true), all)
+    }
+
+    func testUnknownChangedMetricIsIgnored() {
+        XCTAssertEqual(Recompute.metrics(all: all, changed: ["nope"], backfilling: false), [])
+    }
+}

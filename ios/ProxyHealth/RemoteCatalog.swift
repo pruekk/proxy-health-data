@@ -17,6 +17,7 @@ struct RemoteCatalog: Codable, Sendable {
         var backfill: String?
         var retention: String?
         var hourly: Bool?
+        var raw: Bool?
     }
 
     struct Category: Codable, Sendable {
@@ -64,7 +65,8 @@ extension RemoteCatalog {
                     identifier: HKQuantityTypeIdentifier(rawValue: metric.identifier),
                     unit: unit,
                     aggregation: metric.aggregation == "cumulative" ? .cumulative : .discrete,
-                    backfill: Backfill(name: metric.backfill)
+                    backfill: Backfill(name: metric.backfill),
+                    uploadsRaw: metric.raw ?? true
                 )
             )
         }

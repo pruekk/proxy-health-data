@@ -40,7 +40,11 @@ struct LatestView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("วันนี้").font(.system(size: 24, weight: .bold))
-                Text(syncLine).font(.system(size: 13)).foregroundStyle(.secondary)
+                Text(model.syncProgress ?? syncLine)
+                    .font(.system(size: 13))
+                    .foregroundStyle(model.syncProgress == nil ? .secondary : Brand.blue)
+                    .lineLimit(1)
+                    .animation(.default, value: model.syncProgress)
             }
             Spacer()
             Button {

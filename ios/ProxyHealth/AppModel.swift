@@ -6,6 +6,8 @@ import Observation
 final class AppModel {
     var settings = SyncSettings.load()
     var isSyncing = false
+    /// The line the sync is on right now, shown instead of a spinner that says nothing.
+    var syncProgress: String?
     var isAuthorized = UserDefaults.standard.bool(forKey: "healthAuthorizationRequested")
     var lastReport: SyncReport?
     var lastSyncAt = SyncState.lastSyncAt
@@ -76,11 +78,15 @@ final class AppModel {
         isSyncing = true
         errorMessage = nil
         appendLog("Sync started")
-        defer { isSyncing = false }
+        defer { isSyncing = false; syncProgress = nil }
         do {
             let report = try await SyncEngine.shared.sync(trigger: trigger) { line in
-                Task { @MainActor in self.appendLog(line) }
+                Task { @MainActor in
+                    self.syncProgress = line
+                    self.appendLog(line)
+                }
             }
+            syncProgress = nil
             guard !report.skipped else {
                 appendLog("ข้ามการซิงก์ — เพิ่งซิงก์ไปเมื่อครู่")
                 return
