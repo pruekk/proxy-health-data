@@ -1,1 +1,4 @@
 .DS_Store
+
+# SwiftPM build products from `swift test`
+ios/.build/
