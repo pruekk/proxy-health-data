@@ -82,8 +82,13 @@ struct ReadinessCard: View {
 
     private func row(_ factor: ReadinessDoc.Factor) -> some View {
         HStack(spacing: 10) {
-            Text(factor.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary)
-                .frame(width: 66, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(factor.name).font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary)
+                if let note = factor.note {
+                    Text(note).font(.system(size: 10)).foregroundStyle(.tertiary)
+                }
+            }
+            .frame(width: 70, alignment: .leading)
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Brand.track)

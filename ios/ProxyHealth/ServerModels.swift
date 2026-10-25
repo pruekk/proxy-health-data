@@ -102,6 +102,8 @@ struct ReadinessDoc: Codable, Sendable {
         var value: Double
         var baseline: Double?
         var deviation: String?
+        /// Context that is not the comparison — sleep uses it for time in bed.
+        var note: String?
         var direction: String
 
         var id: String { key }
@@ -109,7 +111,7 @@ struct ReadinessDoc: Codable, Sendable {
             switch key {
             case "hrv": "HRV"
             case "restingHeartRate": "ชีพจรพัก"
-            case "sleep": "การนอน"
+            case "sleep": "หลับจริง"
             case "load": "โหลด 7 วัน"
             default: key
             }
@@ -136,10 +138,10 @@ struct ReadinessDoc: Codable, Sendable {
         reason: "กำลังคำนวณความพร้อมจากข้อมูลล่าสุด",
         headline: "กำลังคำนวณความพร้อมจากข้อมูลล่าสุด",
         factors: [
-            .init(key: "hrv", score: 60, value: 60, baseline: 60, deviation: "—", direction: "good"),
-            .init(key: "restingHeartRate", score: 60, value: 60, baseline: 60, deviation: "—", direction: "good"),
-            .init(key: "sleep", score: 60, value: 420, baseline: 480, deviation: "—", direction: "good"),
-            .init(key: "load", score: 60, value: 30, baseline: 30, deviation: "—", direction: "good"),
+            .init(key: "hrv", score: 60, value: 60, baseline: 60, deviation: "—", note: nil, direction: "good"),
+            .init(key: "restingHeartRate", score: 60, value: 60, baseline: 60, deviation: "—", note: nil, direction: "good"),
+            .init(key: "sleep", score: 60, value: 420, baseline: 480, deviation: "—", note: nil, direction: "good"),
+            .init(key: "load", score: 60, value: 30, baseline: 30, deviation: "—", note: nil, direction: "good"),
         ],
         missing: [],
         basis: " "
@@ -150,7 +152,7 @@ struct ReadinessDoc: Codable, Sendable {
             switch $0 {
             case "hrv": "HRV"
             case "restingHeartRate": "ชีพจรพัก"
-            case "sleep": "การนอน"
+            case "sleep": "หลับจริง"
             case "load": "โหลดการซ้อม"
             default: $0
             }

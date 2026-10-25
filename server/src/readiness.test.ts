@@ -157,3 +157,19 @@ describe('reason and headline are separable', () => {
     expect(result.advice).toBeTruthy()
   })
 })
+
+describe('sleep is scored on time asleep', () => {
+  test('time in bed rides along as context without touching the score', () => {
+    const asleepOnly = computeReadiness({ ...realDay, sleepMinutes: 304 })
+    const withBed = computeReadiness({ ...realDay, sleepMinutes: 304, inBedMinutes: 429 })
+    expect(withBed.score).toBe(asleepOnly.score)
+    const factor = withBed.factors.find((f) => f.key === 'sleep')
+    expect(factor?.value).toBe(304)
+    expect(factor?.note).toBe('บนเตียง 7:09')
+  })
+
+  test('no note when the stage data has no in-bed time', () => {
+    const result = computeReadiness({ ...realDay, sleepMinutes: 304 })
+    expect(result.factors.find((f) => f.key === 'sleep')?.note).toBeUndefined()
+  })
+})

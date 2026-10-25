@@ -335,11 +335,14 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
     .filter((n): n is typeof n & { date: string } => typeof n.date === 'string')
     .sort((a, b) => b.date.localeCompare(a.date))[0]
   const sleepMinutes = typeof lastNight?.asleepMinutes === 'number' ? lastNight.asleepMinutes : undefined
+  const stages = (lastNight?.stagesMinutes ?? {}) as Record<string, number>
+  const inBedMinutes = typeof stages.inBed === 'number' ? stages.inBed : undefined
 
   return {
     hrv: latestAndBaseline('heartRateVariabilitySDNN'),
     restingHeartRate: latestAndBaseline('restingHeartRate'),
     sleepMinutes,
+    inBedMinutes,
     load,
   }
 }

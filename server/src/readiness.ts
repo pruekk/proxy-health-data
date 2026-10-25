@@ -11,6 +11,8 @@ export interface ReadinessInputs {
   restingHeartRate?: { latest: number; baseline: number }
   /** Minutes actually asleep last night. */
   sleepMinutes?: number
+  /** Minutes in bed, which is the figure people remember; shown for context, never scored. */
+  inBedMinutes?: number
   /** Exercise minutes: recent average against the long-run average. */
   load?: { acute: number; chronic: number }
   /** Target night's sleep in minutes. */
@@ -27,6 +29,8 @@ export interface Factor {
   baseline?: number
   /** How far from the baseline, in the unit a reader cares about. */
   deviation?: string
+  /** Extra context for the row; sleep uses it for time in bed. */
+  note?: string
   direction: 'good' | 'watch' | 'bad'
 }
 
@@ -93,6 +97,12 @@ export function computeReadiness(inputs: ReadinessInputs) {
       value: Math.round(inputs.sleepMinutes),
       baseline: target,
       deviation: `${Math.floor(inputs.sleepMinutes / 60)}:${String(Math.round(inputs.sleepMinutes % 60)).padStart(2, '0')}`,
+      // Scored on time asleep — the recovery signal — while the remembered figure is usually
+      // time in bed, so the gap is shown rather than left to look like an error.
+      note:
+        inputs.inBedMinutes !== undefined
+          ? `บนเตียง ${Math.floor(inputs.inBedMinutes / 60)}:${String(Math.round(inputs.inBedMinutes % 60)).padStart(2, '0')}`
+          : undefined,
       direction: ratio >= 0.9 ? 'good' : ratio >= 0.75 ? 'watch' : 'bad',
     })
   } else {
