@@ -300,6 +300,30 @@ check "carries a coaching line" "1" "$(echo "$R" | python3 -c 'import sys,json;p
 check "says it is not Garmin" "1" "$(echo "$R" | grep -ci 'Garmin')"
 check "REST route agrees with the tool" "$LEVEL" "$(curl -s $B/v1/battery -H "$EST_AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)["level"])')"
 
+echo "17. retention apply brings an expiry forward, never back"
+# Written while retention was 5 years, then the user picks 1: the sweep has to shorten what is
+# already stamped, which is the same path a metric moving to the short tier takes.
+curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retentionYears":5}' > /dev/null
+python3 - "$B" "$TOKEN" <<'PY2'
+import json, sys, urllib.request
+from datetime import datetime, timezone
+base, token = sys.argv[1], sys.argv[2]
+now = datetime.now(timezone.utc).isoformat()
+req = urllib.request.Request(base + "/v1/sync", data=json.dumps({"samples": [
+    {"id": "ret-wc-0001-0000-0000-000000000000", "type": "waistCircumference", "kind": "quantity",
+     "value": 81, "unit": "cm", "startDate": now, "endDate": now}]}).encode(),
+    headers={"content-type": "application/json", "authorization": "Bearer " + token})
+urllib.request.urlopen(req)
+PY2
+curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retentionYears":1}' > /dev/null
+R=$(curl -s -X POST "$B/v1/retention/apply?scope=waistCircumference&dryRun=false" -H "$AUTH")
+check "shortens the existing expiry" "1" "$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
+R=$(curl -s -X POST "$B/v1/retention/apply?scope=waistCircumference&dryRun=false" -H "$AUTH")
+check "running it again changes nothing" "0" "$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
+curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retentionYears":5}' > /dev/null
+R=$(curl -s -X POST "$B/v1/retention/apply?scope=waistCircumference&dryRun=false" -H "$AUTH")
+check "widening retention does not push it back" "0" "$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
+
 echo
 echo "passed: $pass  failed: $fail"
 [ "$fail" -eq 0 ]

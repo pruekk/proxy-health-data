@@ -435,13 +435,19 @@ export async function applyRetention(uid: string, scope: string, dryRun: boolean
   const years = await getRetentionYears(uid)
   const longMs = years * 365.25 * 86_400_000
   const shortMs = catalog.sync.shortRetentionDays * 86_400_000
-  const writer = db.bulkWriter()
   let scanned = 0
   let stamped = 0
+  // Batched commits rather than a BulkWriter: the same path ingest uses, and a failed write
+  // surfaces as a rejected commit instead of an unhandled rejection that kills the instance.
+  let ops: Op[] = []
 
-  const stamp = (ref: FirebaseFirestore.DocumentReference, at: number, keepLong: boolean) => {
+  // Only ever brings an expiry forward. A document that already expires sooner than the rule
+  // would set is left alone, so re-running this can never resurrect data.
+  const stamp = (ref: FirebaseFirestore.DocumentReference, at: number, keepLong: boolean, current?: Timestamp) => {
+    const target = at + (keepLong ? longMs : shortMs)
+    if (current && current.toMillis() <= target) return
     stamped += 1
-    if (!dryRun) writer.set(ref, { expiresAt: Timestamp.fromMillis(at + (keepLong ? longMs : shortMs)) }, { merge: true })
+    if (!dryRun) ops.push((b) => b.set(ref, { expiresAt: Timestamp.fromMillis(target) }, { merge: true }))
   }
 
   const isDated = scope === 'daily' || scope === 'hourly' || scope === 'workouts'
@@ -481,15 +487,20 @@ export async function applyRetention(uid: string, scope: string, dryRun: boolean
 
     for (const doc of page.docs) {
       scanned += 1
-      if (doc.get('expiresAt')) continue
+      // A metric that moved to the short tier after its samples were written still carries the
+      // old two-year expiry, so an existing value is re-checked rather than skipped.
+      const current = doc.get('expiresAt') as Timestamp | undefined
       const start = doc.get('startDate') as Timestamp | undefined
       const at = isDated && !start ? new Date(`${doc.id}T00:00:00Z`).getTime() : start?.toMillis()
       if (at === undefined || !Number.isFinite(at)) continue
       const keepLong = !short || doc.get('context') === 'workout' || intervals.some((i) => at >= i.from && at <= i.to)
-      stamp(doc.ref, at, keepLong)
+      stamp(doc.ref, at, keepLong, current)
     }
 
-    if (!dryRun) await writer.flush()
+    if (ops.length) {
+      await commit(ops)
+      ops = []
+    }
     cursor = page.docs[page.docs.length - 1]!.id
     if (page.size < RETENTION_PAGE_SIZE) {
       done = true
@@ -497,7 +508,7 @@ export async function applyRetention(uid: string, scope: string, dryRun: boolean
     }
   }
 
-  if (!dryRun) await writer.close()
+  if (ops.length) await commit(ops)
   // `done: false` means the budget ran out; call again with `after` to carry on.
   return { scope, scanned, stamped, retentionYears: years, dryRun, done, after: done ? undefined : cursor }
 }
