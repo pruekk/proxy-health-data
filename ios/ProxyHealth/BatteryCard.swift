@@ -51,7 +51,9 @@ struct BatteryCard: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Brand.track)
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(placeholder ? AnyShapeStyle(Brand.track) : AnyShapeStyle(fillColor))
-                        .frame(width: max(18, geometry.size.width * Double(battery.level) / 100))
+                        // Empty means empty: the minimum width keeps a low level visible, but
+                        // showing a sliver at zero reads as "a bit left" when there is none.
+                        .frame(width: battery.level <= 0 ? 0 : max(18, geometry.size.width * Double(battery.level) / 100))
                         .padding(2)
                     HStack(alignment: .firstTextBaseline, spacing: 1) {
                         Text("\(battery.level)").font(.system(size: 25, weight: .bold)).monospacedDigit()

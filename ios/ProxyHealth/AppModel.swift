@@ -11,7 +11,9 @@ final class AppModel {
     var isAuthorized = UserDefaults.standard.bool(forKey: "healthAuthorizationRequested")
     var lastReport: SyncReport?
     var lastSyncAt = SyncState.lastSyncAt
+    /// Result of the last `/v1/me` call, in words. `nil` until one has been made.
     var connection: String?
+    var isConnected = false
     var errorMessage: String?
     var log: [String] = []
 
@@ -37,20 +39,23 @@ final class AppModel {
         new.save()
         settings = SyncSettings.load()
         connection = nil
+        isConnected = false
     }
 
     func testConnection() async {
+        isConnected = false
         guard let client = APIClient(settings: settings) else {
             connection = SyncError.notConfigured.localizedDescription
             return
         }
         do {
             let profile = try await client.me()
-            connection = "Connected as \(profile.uid)"
+            isConnected = true
+            connection = "เชื่อมต่อแล้ว · \(profile.uid)"
         } catch let error as APIError where error.status == 401 {
-            connection = "Token rejected (\(settings.tokenHint)). Use the part of API_TOKENS before \":me\"."
+            connection = "โทเคนไม่ถูกต้อง (\(settings.tokenHint)) — ใช้ส่วนหน้า \":me\" ของ API_TOKENS"
         } catch {
-            connection = "Failed: \(error.localizedDescription)"
+            connection = "เชื่อมต่อไม่ได้: \(error.localizedDescription)"
         }
     }
 

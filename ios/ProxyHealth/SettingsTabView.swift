@@ -26,7 +26,12 @@ struct SettingsTabView: View {
             .padding(.bottom, 110)
         }
         .background(Brand.ground)
-        .task { await dashboard.load(settings: model.settings) }
+        .task {
+            await dashboard.load(settings: model.settings)
+            // Checked on open rather than only behind the token sheet: the row used to read
+            // "ยังไม่ได้ตรวจสอบ" on every cold start even while syncing worked fine.
+            if model.connection == nil { await model.testConnection() }
+        }
         .sheet(isPresented: $editingConnection) { ConnectionSheet(settings: model.settings) }
         .alert("ซิงก์ใหม่ทั้งหมด?", isPresented: $confirmReset) {
             Button("ยกเลิก", role: .cancel) {}
@@ -76,10 +81,10 @@ struct SettingsTabView: View {
         Card {
             Text("การเชื่อมต่อ").font(.system(size: 10.5, weight: .bold)).kerning(0.9).foregroundStyle(.secondary)
             VStack(spacing: 0) {
-                MetricRow(symbol: model.connection?.hasPrefix("Connected") == true ? "checkmark.circle.fill" : "exclamationmark.circle",
-                          title: model.connection ?? "ยังไม่ได้ตรวจสอบ",
+                MetricRow(symbol: model.isConnected ? "checkmark.circle.fill" : "exclamationmark.circle",
+                          title: model.connection ?? "กำลังตรวจสอบ…",
                           subtitle: URL(string: model.settings.serverURL)?.host(),
-                          value: "", tint: model.connection?.hasPrefix("Connected") == true ? .green : .orange)
+                          value: "", tint: model.isConnected ? .green : .orange)
                 Divider()
                 Button { editingConnection = true } label: {
                     MetricRow(symbol: "key", title: "API token", subtitle: model.settings.tokenHint,
