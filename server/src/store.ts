@@ -225,7 +225,12 @@ export async function ingest(uid: string, body: SyncBody) {
         sourceName: newest.sourceName,
       }
     }
-    doc.sources = Object.fromEntries([...sources].map(([source, count]) => [source, FieldValue.increment(count)]))
+    // Same trap as the daily documents: an empty map is written as a value and would replace
+    // the running per-source counts. It cannot be empty today — a metric is only in this list
+    // because a sample carried it — but the guard costs nothing and the failure is silent.
+    if (sources.size) {
+      doc.sources = Object.fromEntries([...sources].map(([source, count]) => [source, FieldValue.increment(count)]))
+    }
     ops.push((b) => b.set(metricsCol(uid).doc(type), doc, { merge: true }))
   }
 

@@ -5,7 +5,13 @@ import { dailyDocs, hourlyDocs } from './store'
 // leaf, but an empty map has no leaves and is written as a value, replacing what is stored —
 // which is how a sync carrying only activity rings erased four days of statistics.
 describe('daily documents', () => {
-  const ring = { date: '2026-10-25', activeEnergyKcal: 742, activeEnergyGoalKcal: 320 }
+  const ring = {
+    date: '2026-10-25',
+    activeEnergyKcal: 742,
+    activeEnergyGoalKcal: 320,
+    exerciseMinutes: 119,
+    standHours: 11,
+  }
 
   test('rings alone carry no metrics field', () => {
     const doc = dailyDocs([], [ring]).get('2026-10-25')!
