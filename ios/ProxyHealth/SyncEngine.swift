@@ -74,7 +74,7 @@ actor SyncEngine {
 
     func sync(
         trigger: SyncTrigger = .manual,
-        progress: @escaping @Sendable (String) -> Void = { _ in }
+        progress: @escaping @Sendable (SyncProgress) -> Void = { _ in }
     ) async throws -> SyncReport {
         if let current { return try await current.value }
         // HealthKit can fire several observers at once and a foreground return often lands right
@@ -93,16 +93,26 @@ actor SyncEngine {
 
     private func performSync(
         trigger: SyncTrigger,
-        progress: @escaping @Sendable (String) -> Void
+        progress: @escaping @Sendable (SyncProgress) -> Void
     ) async throws -> SyncReport {
+        // A first sync walks two years of history and takes minutes, so every phase reports
+        // where it is. The weights live in SyncProgress; here we only count steps.
+        let startedAt = Date()
+        let emit = { (phase: SyncProgress.Phase, done: Int, total: Int, detail: String?) in
+            progress(SyncProgress(phase: phase, done: done, total: total, detail: detail,
+                                  elapsed: Date().timeIntervalSince(startedAt)))
+        }
         let settings = SyncSettings.load()
         guard let client = APIClient(settings: settings) else { throw SyncError.notConfigured }
         guard HKHealthStore.isHealthDataAvailable() else { throw SyncError.healthDataUnavailable }
 
         var report = SyncReport()
         report.trigger = trigger
-        await refreshCatalog(client: client, progress: progress)
+        emit(.catalog, 0, 2, nil)
+        await refreshCatalog(client: client)
+        emit(.catalog, 1, 2, nil)
         await syncProfile(client: client, report: &report)
+        emit(.catalog, 2, 2, nil)
 
         let catalog = HealthCatalog.effective
         for skipped in catalog.skipped { report.errors.append("catalog: skipped \(skipped)") }
@@ -112,6 +122,8 @@ actor SyncEngine {
         // purely to mark them, which is what made a 12 km run upload twice.
         let windows = (try? await workoutWindows(settings: settings)) ?? TimeWindows([])
         var changed: Set<String> = []
+        let metricCount = catalog.quantities.count + catalog.categories.count
+        var metricsDone = 0
 
         for metric in catalog.quantities {
             do {
@@ -137,10 +149,11 @@ actor SyncEngine {
                 if added + deleted > 0 { changed.insert(metric.key) }
                 report.samples += metric.uploadsRaw ? added : 0
                 report.deletedSamples += deleted
-                if added + deleted > 0 { progress("\(metric.key): \(added) new, \(deleted) deleted") }
             } catch {
                 report.errors.append("\(metric.key): \(error.localizedDescription)")
             }
+            metricsDone += 1
+            emit(.samples, metricsDone, metricCount, metric.key)
         }
 
         for metric in catalog.categories {
@@ -159,12 +172,14 @@ actor SyncEngine {
                 if added + deleted > 0 { changed.insert(metric.key) }
                 report.samples += added
                 report.deletedSamples += deleted
-                if added + deleted > 0 { progress("\(metric.key): \(added) new, \(deleted) deleted") }
             } catch {
                 report.errors.append("\(metric.key): \(error.localizedDescription)")
             }
+            metricsDone += 1
+            emit(.samples, metricsDone, metricCount, metric.key)
         }
 
+        emit(.workouts, 0, 1, nil)
         do {
             // Workouts are few and valuable, so they use the longer daily backfill window.
             let workoutSince = Date().addingTimeInterval(-Double(settings.dailyBackfillDays) * 86_400)
@@ -179,26 +194,26 @@ actor SyncEngine {
                 )
             }
             report.workouts += added
-            if added > 0 { progress("workouts: \(added)") }
         } catch {
             report.errors.append("workouts: \(error.localizedDescription)")
         }
+        emit(.workouts, 1, 1, nil)
 
         // Hourly buckets for the few metrics where the shape of the day matters. Only the last
         // few days are recomputed: older hours never change once the samples have landed.
+        emit(.hourly, 0, 1, nil)
         do {
-            let hours = try await syncHourly(client: client, changed: changed, report: &report)
-            if hours > 0 { progress("hourly buckets: \(hours) วัน") }
+            _ = try await syncHourly(client: client, changed: changed, report: &report)
         } catch {
             report.errors.append("hourly: \(error.localizedDescription)")
         }
+        emit(.hourly, 1, 1, nil)
 
         // Daily aggregates and rings are recomputed for recent days every sync, since the Watch
         // can deliver samples late. The first sync backfills the full window.
         let days = SyncState.dailyBackfillDone ? 3 : settings.dailyBackfillDays
         do {
-            report.days = try await syncDaily(days: days, client: client, changed: changed, report: &report)
-            progress("daily summaries: \(report.days) days")
+            report.days = try await syncDaily(days: days, client: client, changed: changed, report: &report, progress: emit)
             if report.errors.isEmpty { SyncState.dailyBackfillDone = true }
         } catch {
             report.errors.append("daily: \(error.localizedDescription)")
@@ -207,12 +222,12 @@ actor SyncEngine {
         // Raw heart rate and speed for workouts older than the raw window, so past runs can be
         // reviewed (drift, zones, splits) without carrying every heart-rate sample ever recorded.
         do {
-            let detailed = try await syncWorkoutDetails(client: client, settings: settings, progress: progress)
-            if detailed > 0 { progress("workout detail: \(detailed) workouts") }
+            _ = try await syncWorkoutDetails(client: client, settings: settings, progress: emit)
         } catch {
             report.errors.append("workout detail: \(error.localizedDescription)")
         }
 
+        emit(.finishing, 0, 1, nil)
         report.finishedAt = Date()
         SyncState.lastSyncAt = report.finishedAt
         SyncState.remember(report)
@@ -230,6 +245,7 @@ actor SyncEngine {
                 errors: report.errors.isEmpty ? nil : Array(report.errors.prefix(40))
             )
         )
+        emit(.finishing, 1, 1, nil)
         return report
     }
 
@@ -239,7 +255,7 @@ actor SyncEngine {
     private func syncWorkoutDetails(
         client: APIClient,
         settings: SyncSettings,
-        progress: @escaping @Sendable (String) -> Void
+        progress: @escaping @Sendable (SyncProgress.Phase, Int, Int, String?) -> Void
     ) async throws -> Int {
         let since = Date().addingTimeInterval(-Double(settings.dailyBackfillDays) * 86_400)
         let query = HKSampleQueryDescriptor(
@@ -258,7 +274,10 @@ actor SyncEngine {
             }
             return true
         }
-        guard !workouts.isEmpty else { return 0 }
+        guard !workouts.isEmpty else {
+            progress(.workoutDetail, 1, 1, nil)
+            return 0
+        }
 
         var done = 0
         for workout in workouts {
@@ -281,6 +300,8 @@ actor SyncEngine {
             }
             guard !payloads.isEmpty else {
                 SyncState.markWorkoutDetailDone(workout.uuid.uuidString)
+                done += 1
+                progress(.workoutDetail, done, workouts.count, nil)
                 continue
             }
             for chunk in stride(from: 0, to: payloads.count, by: Self.uploadChunk) {
@@ -289,7 +310,7 @@ actor SyncEngine {
             }
             SyncState.markWorkoutDetailDone(workout.uuid.uuidString)
             done += 1
-            progress("workout \(Self.dayKey(workout.startDate)): \(payloads.count) raw samples")
+            progress(.workoutDetail, done, workouts.count, Self.dayKey(workout.startDate))
         }
         return done
     }
@@ -297,11 +318,10 @@ actor SyncEngine {
     /// Downloads the metric catalog and asks for any read permission it added. Without this a
     /// metric added server-side would sync nothing: HealthKit returns no data for a type that was
     /// never authorised, rather than prompting.
-    private func refreshCatalog(client: APIClient, progress: @escaping @Sendable (String) -> Void) async {
+    private func refreshCatalog(client: APIClient) async {
         // `try?` folds both outcomes that mean "keep what we have": a 304, and a failed request.
         if let catalog = try? await client.catalog(knownVersion: CatalogStore.cached?.version) {
             CatalogStore.save(catalog)
-            progress("catalog updated to \(catalog.version)")
         }
         await requestNewReadTypes()
     }
@@ -439,7 +459,13 @@ actor SyncEngine {
         return Set(stats.map(\.date)).count
     }
 
-    private func syncDaily(days: Int, client: APIClient, changed: Set<String>, report: inout SyncReport) async throws -> Int {
+    private func syncDaily(
+        days: Int,
+        client: APIClient,
+        changed: Set<String>,
+        report: inout SyncReport,
+        progress: @escaping @Sendable (SyncProgress.Phase, Int, Int, String?) -> Void
+    ) async throws -> Int {
         let calendar = Calendar.current
         let end = Date()
         let start = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -(days - 1), to: end)!)
@@ -449,7 +475,12 @@ actor SyncEngine {
         let all = HealthCatalog.effective.quantities
         let wanted = Set(Recompute.metrics(all: all.map(\.key), changed: changed, backfilling: !SyncState.dailyBackfillDone))
         var stats: [DailyStatPayload] = []
-        for metric in all where wanted.contains(metric.key) {
+        // Counted before the loop so the bar knows how far it has to go: on a first sync this
+        // is every metric over two years, which is most of the wait.
+        let queue = all.filter { wanted.contains($0.key) }
+        var done = 0
+        progress(.daily, 0, max(queue.count, 1), nil)
+        for metric in queue {
             do {
                 stats += try await dailyStats(metric, from: start, to: end)
             } catch {
@@ -458,6 +489,8 @@ actor SyncEngine {
                     report.errors.append("daily \(metric.key): \(error.localizedDescription)")
                 }
             }
+            done += 1
+            progress(.daily, done, max(queue.count, 1), metric.key)
         }
         let rings = try await activitySummaries(from: start, to: end)
 

@@ -6,8 +6,9 @@ import Observation
 final class AppModel {
     var settings = SyncSettings.load()
     var isSyncing = false
-    /// The line the sync is on right now, shown instead of a spinner that says nothing.
-    var syncProgress: String?
+    /// Where the sync has got to, shown instead of a spinner that says nothing. A first sync
+    /// takes minutes, so the phase, the count and the estimate all matter.
+    var syncProgress: SyncProgress?
     var isAuthorized = UserDefaults.standard.bool(forKey: "healthAuthorizationRequested")
     var lastReport: SyncReport?
     var lastSyncAt = SyncState.lastSyncAt
@@ -85,10 +86,11 @@ final class AppModel {
         appendLog("Sync started")
         defer { isSyncing = false; syncProgress = nil }
         do {
-            let report = try await SyncEngine.shared.sync(trigger: trigger) { line in
+            let report = try await SyncEngine.shared.sync(trigger: trigger) { progress in
                 Task { @MainActor in
-                    self.syncProgress = line
-                    self.appendLog(line)
+                    // One log line per phase: the per-metric updates are for the bar, not the log.
+                    if self.syncProgress?.phase != progress.phase { self.appendLog(progress.phase.label) }
+                    self.syncProgress = progress
                 }
             }
             syncProgress = nil
@@ -106,10 +108,13 @@ final class AppModel {
         }
     }
 
-    func resetSync() {
+    /// Forgets every anchor and syncs straight away. It used to only clear the anchors and
+    /// leave, so the screen sat there saying nothing while no work was happening at all.
+    func resetSync() async {
         SyncState.reset()
         lastSyncAt = nil
         lastReport = nil
-        appendLog("Sync state reset; next sync re-uploads the backfill window")
+        appendLog("ล้าง anchor แล้ว — เริ่มดึงข้อมูลใหม่ทั้งหมด")
+        await syncNow(trigger: .manual)
     }
 }

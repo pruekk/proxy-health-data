@@ -212,6 +212,34 @@
   .batstats span{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
   .batsay{margin:12px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
   .hidden{display:none}
+
+  /* ---- loading states ---- */
+  /* The loading reference is documentation, not a screen: it grows past one phone height. */
+  .phone.tall{height:auto}
+  .phone.tall .screen{height:auto;overflow:visible;padding-bottom:40px}
+  .loadcard{margin:0 0 12px}
+  .loadcard .what{font-size:11px;color:var(--muted);line-height:1.5;margin:9px 0 0}
+  .loadcard .what b{color:var(--ink);font-weight:600}
+  .pbar{height:5px;border-radius:3px;background:#e8e8ed;overflow:hidden}
+  .pbar b{display:block;height:100%;border-radius:3px;background:#2f7bff}
+  .pline{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-top:7px;
+         font-size:11.5px;color:var(--muted)}
+  .pline .pct{font-weight:600;font-variant-numeric:tabular-nums}
+  .spin{width:14px;height:14px;border-radius:50%;border:2px solid #d6d6db;border-top-color:#2f7bff;
+        display:inline-block;vertical-align:-2px;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .skel{border-radius:8px;background:linear-gradient(90deg,#ececf1 25%,#f5f5f8 50%,#ececf1 75%);
+        background-size:400% 100%;animation:sh 1.4s ease-in-out infinite}
+  @keyframes sh{0%{background-position:100% 0}100%{background-position:-100% 0}}
+  .skelrow{display:flex;align-items:center;gap:14px}
+  .skeldial{width:76px;height:76px;border-radius:50%;flex:none}
+  .skellines{flex:1}
+  .skellines .skel{height:11px;margin-bottom:8px}
+  .btnrow{display:flex;align-items:center;justify-content:space-between}
+  .phases td:first-child{width:130px}
+  .phases td:nth-child(2){width:auto;font-weight:400;color:var(--muted)}
+  .btnrow .mini{width:30px;height:30px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.08);
+                display:flex;align-items:center;justify-content:center}
 </style>
 </head>
 <body>
@@ -629,6 +657,81 @@
   <div class="homebar"></div>
 </div>
 <div class="caption">ยืนยันก่อนทำ — 2 แบบ</div>
+</div>
+
+<!-- ============ LOADING STATES ============ -->
+<div class="phone-wrap">
+<div class="phone tall">
+  <div class="statusbar"><span>9:41</span>
+    <span class="icons"><span class="bars"><i></i><i></i><i></i><i></i></span>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 10.5l2-2.2a2.9 2.9 0 00-4 0l2 2.2z" fill="#1c1c1e"/><path d="M3.6 5.6a6.5 6.5 0 018.8 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/><path d="M1 3a10 10 0 0114 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span class="batt"><b></b></span></span>
+  </div>
+  <div class="screen">
+    <div class="apphead"><h2>สถานะโหลด</h2></div>
+    <p class="fine" style="margin:0 0 14px">กฎเดียว: <b>รู้ว่าเหลือเท่าไร → แถบ + เปอร์เซ็นต์ + เวลาที่เหลือ</b> · ไม่รู้ → สปินเนอร์พร้อมบอกว่ากำลังทำอะไร · รอข้อมูลมาวาด → โครงร่างจางของการ์ดนั้นเอง</p>
+
+    <div class="card loadcard">
+      <span class="label">1 · ซิงก์ใหญ่ — รู้เปอร์เซ็นต์</span>
+      <div style="margin-top:12px">
+        <div class="pbar"><b style="width:61%"></b></div>
+        <div class="pline"><span>สรุปรายวัน 7/12 · bodyMass · เหลืออีกประมาณ 2 นาที</span><span class="pct">61%</span></div>
+      </div>
+      <p class="what"><b>ที่ไหน:</b> ใต้หัวข้อ "วันนี้" และใต้ปุ่มซิงก์ใหม่ทั้งหมดในตั้งค่า · <b>เมื่อไร:</b> ทุกครั้งที่ซิงก์ ยาวสุดตอนดึงย้อนหลังทั้งหมด (หลายนาที)<br>
+        บอก 4 อย่าง: ขั้นตอนไหน · ทำไปกี่ตัวจากกี่ตัว · กำลังทำอะไรอยู่ · เหลืออีกประมาณเท่าไร</p>
+    </div>
+
+    <div class="card loadcard">
+      <span class="label">2 · 7 ขั้นตอนของการซิงก์</span>
+      <table class="bands formula phases" style="margin-top:10px">
+        <tr><td>ตรวจรายการข้อมูล</td><td>3%</td></tr>
+        <tr><td>ดึงข้อมูลดิบ</td><td>42% — ไล่ทีละ metric (36 ตัว)</td></tr>
+        <tr><td>ออกกำลังกาย</td><td>3%</td></tr>
+        <tr><td>สรุปรายชั่วโมง</td><td>10%</td></tr>
+        <tr><td>สรุปรายวัน</td><td>34% — ไล่ทีละ metric</td></tr>
+        <tr><td>รายละเอียดการซ้อม</td><td>6% — ไล่ทีละ workout</td></tr>
+        <tr><td>กำลังปิดงาน</td><td>2%</td></tr>
+      </table>
+      <p class="what">น้ำหนักคงที่ตามงานที่ใช้เวลาจริง แถบจึงเดินหน้าอย่างเดียว ไม่กระโดดถอยหลัง · เวลาที่เหลือคำนวณจากอัตราที่ทำได้จริง และจะยังไม่โชว์จนกว่าจะเดินไปพอประมาณ (กัน "เหลือ 5 วิ" ตั้งแต่วินาทีแรก)</p>
+    </div>
+
+    <div class="card loadcard">
+      <span class="label">3 · เปิดแอปครั้งแรก — โครงร่างจาง</span>
+      <div class="skelrow" style="margin-top:12px">
+        <div class="skel skeldial"></div>
+        <div class="skellines">
+          <div class="skel" style="width:85%"></div>
+          <div class="skel" style="width:65%"></div>
+          <div class="skel" style="width:45%;margin-bottom:0"></div>
+        </div>
+      </div>
+      <p class="what"><b>ที่ไหน:</b> การ์ดความพร้อมซ้อมและพลังงานร่างกาย · <b>เมื่อไร:</b> ระหว่างรอค่าจากเซิร์ฟเวอร์ (ไม่ถึงวินาที)<br>
+        ใช้โครงร่างแทนสปินเนอร์เพราะรู้อยู่แล้วว่าหน้าตาจะออกมาเป็นอะไร และกันการ์ดกระโดดตอนค่ามาถึง — สีถูกถอดออกหมด ไม่งั้นจะเห็นวงเขียวหลอกว่าพร้อมซ้อม</p>
+    </div>
+
+    <div class="card loadcard">
+      <span class="label">4 · งานสั้น — สปินเนอร์</span>
+      <div class="btnrow" style="margin-top:12px">
+        <span style="font-size:12.5px;color:var(--ink-2)"><span class="spin"></span> &nbsp;กำลังตัดการเชื่อมต่อ…</span>
+        <span class="mini"><span class="spin"></span></span>
+      </div>
+      <p class="what"><b>ที่ไหน:</b> ปุ่มรีเฟรชมุมขวาบน (วงกลมเล็ก) · ข้อความใต้การ์ดตั้งค่าตอนตัดการเชื่อมต่อ ลบข้อมูล หรือขอสิทธิ์ Health<br>
+        <b>เมื่อไร:</b> งานที่เป็นคำสั่งเดียว จบในไม่กี่วินาที และบอกเปอร์เซ็นต์ไม่ได้ · ระหว่างนั้นปุ่มจะกดซ้ำไม่ได้</p>
+    </div>
+
+    <div class="card loadcard">
+      <span class="label">5 · งานฝั่งเซิร์ฟเวอร์ — นับเป็นชิ้น</span>
+      <div style="margin-top:12px">
+        <div class="pbar"><b style="width:45%;background:#8ed24a"></b></div>
+        <div class="pline"><span>กำลังปรับข้อมูลเดิม 5/11 ประเภท · 3,204 รายการ</span><span class="pct">45%</span></div>
+      </div>
+      <p class="what"><b>ที่ไหน:</b> ในการ์ด "เก็บข้อมูลย้อนหลัง" หลังเปลี่ยนจำนวนปี · <b>เมื่อไร:</b> เซิร์ฟเวอร์ไล่ปรับวันหมดอายุทีละประเภท<br>
+        นับเป็นชิ้นได้จริง เลยบอกทั้งจำนวนประเภทที่ทำไปแล้วและจำนวนรายการที่แก้ไป</p>
+    </div>
+  </div>
+  <div class="homebar"></div>
+</div>
+<div class="caption">สถานะโหลด — 5 แบบ</div>
 </div>
 </div>
 

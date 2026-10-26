@@ -45,11 +45,18 @@ struct LatestView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("วันนี้").font(.system(size: 24, weight: .bold))
-                Text(model.syncProgress ?? syncLine)
+                Text(model.syncProgress?.line ?? syncLine)
                     .font(.system(size: 13))
                     .foregroundStyle(model.syncProgress == nil ? .secondary : Brand.blue)
                     .lineLimit(1)
-                    .animation(.default, value: model.syncProgress)
+                    .animation(.default, value: model.syncProgress?.line)
+                if let progress = model.syncProgress {
+                    ProgressView(value: progress.fraction)
+                        .tint(Brand.blue)
+                        .frame(maxWidth: 220)
+                        .padding(.top, 4)
+                        .animation(.default, value: progress.fraction)
+                }
             }
             Spacer()
             Button {

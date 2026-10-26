@@ -35,9 +35,9 @@ struct SettingsTabView: View {
         .sheet(isPresented: $editingConnection) { ConnectionSheet(settings: model.settings) }
         .alert("ซิงก์ใหม่ทั้งหมด?", isPresented: $confirmReset) {
             Button("ยกเลิก", role: .cancel) {}
-            Button("ซิงก์ใหม่", role: .destructive) { model.resetSync() }
+            Button("ซิงก์ใหม่", role: .destructive) { Task { await model.resetSync() } }
         } message: {
-            Text("ลืม anchor ทั้งหมดแล้วดึงข้อมูลใหม่ตามนโยบาย backfill ข้อมูลเดิมบนเซิร์ฟเวอร์ไม่หาย")
+            Text("ลืม anchor ทั้งหมดแล้วเริ่มดึงข้อมูลใหม่ทันที ใช้เวลาหลายนาทีเพราะคำนวณย้อนหลังทั้งช่วง เปิดแอปค้างไว้จนกว่าแถบความคืบหน้าจะเต็ม — ข้อมูลเดิมบนเซิร์ฟเวอร์ไม่หาย")
         }
         .alert("ตัดการเชื่อมต่อ connector ทั้งหมด?", isPresented: $confirmRevoke) {
             Button("ยกเลิก", role: .cancel) {}
@@ -167,9 +167,11 @@ struct SettingsTabView: View {
                 VStack(spacing: 0) {
                     Button { confirmReset = true } label: {
                         MetricRow(symbol: "arrow.clockwise.circle", title: "ซิงก์ใหม่ทั้งหมด",
-                                  subtitle: "ลืม anchor แล้วดึงใหม่ตาม backfill", value: "", showsChevron: true)
+                                  subtitle: model.isSyncing ? "กำลังทำงาน…" : "ลืม anchor แล้วดึงใหม่ตาม backfill",
+                                  value: "", showsChevron: !model.isSyncing)
                     }
                     .buttonStyle(.plain)
+                    .disabled(model.isSyncing)
                     Divider()
                     Button { Task { await requestPermissions() } } label: {
                         MetricRow(symbol: "heart.text.square", title: "ขอสิทธิ์ Health ที่ยังขาด",
@@ -189,6 +191,26 @@ struct SettingsTabView: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+            if let progress = model.syncProgress {
+                VStack(alignment: .leading, spacing: 7) {
+                    ProgressView(value: progress.fraction).tint(Brand.blue)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(progress.line).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Text("\(progress.percent)%")
+                            .font(.system(size: 11.5, weight: .semibold)).monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.top, 10).padding(.horizontal, 2)
+                .animation(.default, value: progress.fraction)
+            } else if model.isSyncing {
+                HStack(spacing: 7) {
+                    ProgressView().controlSize(.small)
+                    Text("กำลังเริ่ม…").font(.system(size: 12.5)).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8).padding(.horizontal, 2)
             }
             if let busy {
                 Text(busy).font(.system(size: 12.5)).foregroundStyle(.secondary)
