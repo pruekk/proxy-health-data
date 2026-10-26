@@ -119,7 +119,7 @@ function workoutDoc(w: WorkoutInput, retentionYears: number): DocumentData {
 
 // One document per day holding every metric's 24 hourly slots: 365 documents a year rather
 // than tens of thousands, and a month of intraday shape comes back in a single query.
-function hourlyDocs(stats: HourlyStatInput[]): Map<string, DocumentData> {
+export function hourlyDocs(stats: HourlyStatInput[]): Map<string, DocumentData> {
   const days = new Map<string, DocumentData>()
   for (const { date, hour, type, ...values } of stats) {
     let doc = days.get(date)
@@ -127,10 +127,13 @@ function hourlyDocs(stats: HourlyStatInput[]): Map<string, DocumentData> {
     doc.metrics[type] ??= {}
     doc.metrics[type][hour] = values
   }
+  for (const doc of days.values()) {
+    if (!Object.keys(doc.metrics).length) delete doc.metrics
+  }
   return days
 }
 
-function dailyDocs(stats: DailyStatInput[], rings: ActivitySummaryInput[]): Map<string, DocumentData> {
+export function dailyDocs(stats: DailyStatInput[], rings: ActivitySummaryInput[]): Map<string, DocumentData> {
   const days = new Map<string, DocumentData>()
   const day = (date: string) => {
     let doc = days.get(date)
@@ -139,6 +142,13 @@ function dailyDocs(stats: DailyStatInput[], rings: ActivitySummaryInput[]): Map<
   }
   for (const { date, type, ...values } of stats) day(date).metrics[type] = values
   for (const { date, ...activity } of rings) day(date).activity = activity
+  // A merge writes each leaf of a nested map on its own, but an empty map has no leaves, so
+  // it is written as a value and replaces whatever was stored. A sync that carries rings for a
+  // day without new statistics — the usual case, since statistics are only recomputed for
+  // metrics that changed — would otherwise erase that day's metrics.
+  for (const doc of days.values()) {
+    if (!Object.keys(doc.metrics).length) delete doc.metrics
+  }
   return days
 }
 

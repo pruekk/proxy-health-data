@@ -324,6 +324,31 @@ curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d 
 R=$(curl -s -X POST "$B/v1/retention/apply?scope=waistCircumference&dryRun=false" -H "$AUTH")
 check "widening retention does not push it back" "0" "$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
 
+echo "18. a rings-only sync does not erase that day's statistics"
+# The app recomputes statistics only for metrics that changed, but sends activity rings for the
+# whole recent window every time. That combination wiped four days of HRV, resting pulse and
+# exercise minutes in production.
+python3 - "$B" "$EST_TOKEN" <<'PY2'
+import json, sys, urllib.request
+base, token = sys.argv[1], sys.argv[2]
+def post(payload):
+    req = urllib.request.Request(base + "/v1/sync", data=json.dumps(payload).encode(),
+        headers={"content-type": "application/json", "authorization": "Bearer " + token})
+    urllib.request.urlopen(req)
+post({"timeZone": "UTC", "dailyStats": [
+    {"date": "2026-03-01", "type": "restingHeartRate", "unit": "count/min", "avg": 58},
+    {"date": "2026-03-01", "type": "appleExerciseTime", "unit": "min", "sum": 42},
+]})
+post({"timeZone": "UTC", "activitySummaries": [
+    {"date": "2026-03-01", "activeEnergyKcal": 700, "activeEnergyGoalKcal": 320,
+     "exerciseMinutes": 42, "exerciseMinutesGoal": 30, "standHours": 11, "standHoursGoal": 10}]})
+print("  synced statistics, then rings alone for the same day")
+PY2
+DAY=$(curl -s "$B/v1/daily?from=2026-03-01&to=2026-03-01" -H "$EST_AUTH")
+check "resting pulse survives" "58" "$(echo "$DAY" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["metrics"]["restingHeartRate"]["avg"])')"
+check "exercise minutes survive" "42" "$(echo "$DAY" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["metrics"]["appleExerciseTime"]["sum"])')"
+check "the rings landed too" "700" "$(echo "$DAY" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["activity"]["activeEnergyKcal"])')"
+
 echo
 echo "passed: $pass  failed: $fail"
 [ "$fail" -eq 0 ]
