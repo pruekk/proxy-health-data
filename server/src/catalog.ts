@@ -95,7 +95,10 @@ const quantities: QuantityMetric[] = [
 ]
 
 const categories: CategoryMetric[] = [
-  { key: 'sleepAnalysis', identifier: 'HKCategoryTypeIdentifierSleepAnalysis' },
+  // Without an explicit window this fell back to the seven-day default, so a reinstall or a
+  // first sync saw a week of nights while heart rate and HRV came back two years — which left
+  // the coaching tools with no sleep baseline to compare a night against.
+  { key: 'sleepAnalysis', identifier: 'HKCategoryTypeIdentifierSleepAnalysis', backfill: 'extended' },
   { key: 'mindfulSession', identifier: 'HKCategoryTypeIdentifierMindfulSession', backfill: 'extended' },
   { key: 'highHeartRateEvent', identifier: 'HKCategoryTypeIdentifierHighHeartRateEvent', backfill: 'extended' },
   { key: 'lowHeartRateEvent', identifier: 'HKCategoryTypeIdentifierLowHeartRateEvent', backfill: 'extended' },
@@ -174,7 +177,9 @@ const body = {
   quantities,
   categories,
   // Pulled per workout so past runs stay reviewable without keeping every heart-rate sample.
-  workoutDetailMetrics: ['heartRate', 'runningSpeed', 'cyclingSpeed'],
+  // Distance is aggregate-only day to day, but inside a workout the raw samples are what
+  // per-kilometre splits are built from.
+  workoutDetailMetrics: ['heartRate', 'runningSpeed', 'cyclingSpeed', 'distanceWalkingRunning'],
   // Characteristics are read once; without them VO2 max cannot be classified.
   characteristics: ['HKCharacteristicTypeIdentifierDateOfBirth', 'HKCharacteristicTypeIdentifierBiologicalSex'],
   display,

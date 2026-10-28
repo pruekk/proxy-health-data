@@ -377,6 +377,45 @@ check "the score does not move" "$(echo "$R1" | python3 -c 'import sys,json;prin
 check "nor the time it was computed" "$STAMP" "$(echo "$R2" | python3 -c 'import sys,json;print(json.load(sys.stdin)["computedAt"])')"
 check "the tool agrees with the route" "$(echo "$R2" | python3 -c 'import sys,json;print(json.load(sys.stdin)["score"])')" "$(call get_training_readiness '{}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["score"])')"
 
+echo "20. a nap does not get counted as part of the night"
+# Fixed dates: the result must not depend on what time of day the suite runs.
+python3 - "$B" "$EST_TOKEN" <<'PY2'
+import json, sys, urllib.request
+base, token = sys.argv[1], sys.argv[2]
+def sample(tag, start, end, label="asleepCore", value=3, source="Watch"):
+    return {"id": "nap-%s-0000-0000-000000000000" % tag, "type": "sleepAnalysis", "kind": "category",
+            "value": value, "valueLabel": label, "sourceName": source,
+            "startDate": start, "endDate": end}
+payload = {"timeZone": "UTC", "samples": [
+    # A night from 23:20 to 06:00, with an hour awake in the middle: two stretches, one night.
+    sample("n1", "2026-02-09T23:20:00.000Z", "2026-02-10T02:00:00.000Z"),
+    sample("n2", "2026-02-10T03:10:00.000Z", "2026-02-10T06:00:00.000Z"),
+    # The phone recorded the same night: the same minutes must not be counted twice.
+    sample("n3", "2026-02-09T23:20:00.000Z", "2026-02-10T02:00:00.000Z", source="iPhone"),
+    # And a nap in the afternoon of the same date.
+    sample("p1", "2026-02-10T14:00:00.000Z", "2026-02-10T14:45:00.000Z"),
+]}
+req = urllib.request.Request(base + "/v1/sync", data=json.dumps(payload).encode(),
+    headers={"content-type": "application/json", "authorization": "Bearer " + token})
+urllib.request.urlopen(req)
+print("  seeded a split night (160 + 170 min), a duplicate from a second source, and a 45-minute nap")
+PY2
+S=$(call_est get_sleep '{"from":"2026-02-10","to":"2026-02-10"}')
+check "both halves of the night are one night" "330" "$(echo "$S" | python3 -c 'import sys,json;n=json.load(sys.stdin)["nights"];print(n[0]["asleepMinutes"] if n else 0)')"
+check "the second source does not double it" "1" "$(echo "$S" | python3 -c 'import sys,json;n=json.load(sys.stdin)["nights"];print(1 if n and n[0]["asleepMinutes"] < 400 else 0)')"
+check "the nap is kept separate" "45" "$(echo "$S" | python3 -c 'import sys,json;n=json.load(sys.stdin)["nights"];print(sum(p["asleepMinutes"] for x in n for p in x.get("naps",[])))')"
+check "waking is the morning, not the nap" "06" "$(echo "$S" | python3 -c 'import sys,json;n=json.load(sys.stdin)["nights"];print(n[0]["wakeTime"][11:13] if n else "")')"
+
+echo "21. splits come back with the workout detail"
+WID=$(call_est get_workouts '{"days":30,"limit":1}' | python3 -c 'import sys,json;w=json.load(sys.stdin)["workouts"];print(w[0]["id"] if w else "")')
+if [ -n "$WID" ]; then
+  D=$(call_est get_workout_detail "{\"workoutId\":\"$WID\"}")
+  check "the detail carries a splits field" "1" "$(echo "$D" | python3 -c 'import sys,json;print(1 if "splits" in json.load(sys.stdin) else 0)')"
+  check "and says why when there are none" "1" "$(echo "$D" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(1 if d["splits"] or "No splits" in d["note"] else 0)')"
+else
+  echo "  skipped: no workout seeded for this user"
+fi
+
 echo
 echo "passed: $pass  failed: $fail"
 [ "$fail" -eq 0 ]

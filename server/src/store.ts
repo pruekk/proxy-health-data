@@ -324,6 +324,17 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
     'appleExerciseTime',
   ])
 
+  // Sleeping HRV is the comparable figure, but it is only used once there are enough nights to
+  // build a baseline from — and then for both sides of the comparison, since a sleeping reading
+  // against a whole-day baseline would be a different number against a different yardstick.
+  const sleepHrv = await sleepHrvByNight(
+    uid,
+    { from: new Date(today.getTime() - baselineDays * 86_400_000), to: today },
+    timeZone,
+  )
+  const sleepHrvNights = [...sleepHrv.entries()].sort(([a], [b]) => a.localeCompare(b))
+  const useSleepHrv = sleepHrvNights.length >= SLEEP_HRV_MINIMUM_NIGHTS
+
   const latestAndBaseline = (type: string) => {
     const values = (series[type] ?? []).map((p) => p.avg ?? p.sum).filter((v): v is number => typeof v === 'number')
     if (values.length < 2) return undefined
@@ -352,11 +363,25 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
     .filter((n): n is typeof n & { date: string } => typeof n.date === 'string')
     .sort((a, b) => b.date.localeCompare(a.date))[0]
   const sleepMinutes = typeof lastNight?.asleepMinutes === 'number' ? lastNight.asleepMinutes : undefined
+  // Apple only records an explicit "inBed" stage when the user has that turned on; otherwise
+  // the time between first and last sleep sample is the honest answer.
   const stages = (lastNight?.stagesMinutes ?? {}) as Record<string, number>
-  const inBedMinutes = typeof stages.inBed === 'number' ? stages.inBed : undefined
+  const inBedMinutes =
+    typeof stages.inBed === 'number'
+      ? stages.inBed
+      : typeof lastNight?.inBedMinutes === 'number'
+        ? lastNight.inBedMinutes
+        : undefined
+
+  const hrvValues = sleepHrvNights.map(([, v]) => v.avg)
+  const hrv = useSleepHrv
+    ? { latest: hrvValues[hrvValues.length - 1]!, baseline: hrvValues.reduce((a, b) => a + b, 0) / hrvValues.length }
+    : latestAndBaseline('heartRateVariabilitySDNN')
 
   return {
-    hrv: latestAndBaseline('heartRateVariabilitySDNN'),
+    hrv,
+    hrvSource: useSleepHrv ? ('sleep' as const) : ('daily' as const),
+    hrvNights: sleepHrvNights.length,
     restingHeartRate: latestAndBaseline('restingHeartRate'),
     sleepMinutes,
     inBedMinutes,
@@ -403,8 +428,10 @@ export async function getReadiness(uid: string) {
  * an afternoon nap into the same bucket as the night before it — fine for a sleep report, wrong
  * for a battery that charges per hour asleep.
  */
-export async function sleepSessions(uid: string, range: Range) {
-  const samples = await querySamples(uid, 'sleepAnalysis', range, 5000)
+export async function sleepSessions(uid: string, range: Range, limit = 5000) {
+  // The cap matters: samples come back newest first, so a window wider than the cap would
+  // quietly lose its oldest nights — which is exactly the end a baseline needs.
+  const samples = await querySamples(uid, 'sleepAnalysis', range, limit)
   const asleep = samples
     .filter((s) => ASLEEP.has(String(s.valueLabel ?? s.value)))
     .map((s) => ({ start: new Date(String(s.startDate)).getTime(), end: new Date(String(s.endDate)).getTime() }))
@@ -428,6 +455,50 @@ export async function sleepSessions(uid: string, range: Range) {
   }
   return sessions.map((s) => ({ ...s, asleepMinutes: Math.round(s.asleepMinutes) }))
 }
+
+/** Sleep this long counts as a night even when it ends outside the morning. */
+const NIGHT_MINUTES = 150
+
+/**
+ * Average HRV measured while actually asleep, per night.
+ *
+ * Apple publishes one daily average that mixes readings taken during a run, during a stressful
+ * meeting and during sleep, which is why the same person's daily figure swings between 28 and
+ * 115 ms. Only the sleeping readings are comparable night to night, so they are picked out here
+ * and keyed by the morning the night ended on.
+ */
+export async function sleepHrvByNight(uid: string, range: Range, timeZone: string) {
+  const dayOf = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+  const [sessions, samples] = await Promise.all([
+    sleepSessions(uid, range, BASELINE_SAMPLE_LIMIT),
+    querySamples(uid, 'heartRateVariabilitySDNN', range, BASELINE_SAMPLE_LIMIT),
+  ])
+
+  const readings = new Map<string, number[]>()
+  for (const sample of samples) {
+    const at = new Date(String(sample.startDate)).getTime()
+    const value = typeof sample.value === 'number' ? sample.value : undefined
+    if (value === undefined || !Number.isFinite(at)) continue
+    const session = sessions.find((s) => at >= s.start && at <= s.end)
+    if (!session) continue
+    const date = dayOf.format(new Date(session.end))
+    readings.set(date, [...(readings.get(date) ?? []), value])
+  }
+
+  return new Map(
+    [...readings].map(([date, values]) => [
+      date,
+      { avg: values.reduce((a, b) => a + b, 0) / values.length, count: values.length },
+    ]),
+  )
+}
+
+/** Ninety nights of stage samples runs to a few thousand documents; the cap is a ceiling that
+ *  keeps a wide window from silently losing its oldest end, not a target. */
+const BASELINE_SAMPLE_LIMIT = 20_000
+
+/** Nights of sleeping HRV needed before it is trusted over Apple's daily average. */
+const SLEEP_HRV_MINIMUM_NIGHTS = 14
 
 /** Days of history simulated so the level carried into this morning is itself earned. */
 const BATTERY_HISTORY_DAYS = catalog.battery.historyDays
@@ -469,6 +540,7 @@ export async function collectBatteryInputs(uid: string): Promise<BatteryInputs> 
       asleepMinutes: session.asleepMinutes,
     })),
     NIGHT_ENDS_BEFORE_HOUR,
+    NIGHT_MINUTES,
   )
 
   // A night the watch did not record is stood in for by the median of the nights it did, so the
@@ -806,43 +878,143 @@ const ASLEEP = new Set(['asleepUnspecified', 'asleepCore', 'asleepDeep', 'asleep
 // Taking `[length - 1]` here means the oldest night, which is usually one the window cut in half.
 // When several sources recorded the same night (Watch, iPhone, third-party), the source
 // with the most asleep time is reported so stages are not double counted.
+/** Minutes covered by a set of intervals, counting overlap once. Two sources recording the
+ *  same night, or a stage sample inside another, must not add up to twice the sleep. */
+function unionMinutes(intervals: { from: number; to: number }[]) {
+  const sorted = [...intervals].sort((a, b) => a.from - b.from)
+  let total = 0
+  let cursor = -Infinity
+  for (const { from, to } of sorted) {
+    const start = Math.max(from, cursor)
+    if (to > start) total += to - start
+    cursor = Math.max(cursor, to)
+  }
+  return total / 60_000
+}
+
 export async function querySleep(uid: string, range: Range, timeZone: string) {
   const samples = await querySamples(uid, 'sleepAnalysis', range, 5000)
   const dayOf = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+  const hourOf = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hour12: false })
 
-  type Night = { start: string; end: string; stages: Record<string, number>; asleep: number }
-  const nights = new Map<string, Map<string, Night>>()
+  // Sleep is recorded as stretches, not calendar days. Grouping by the date a sample ends on
+  // puts an afternoon nap in the same bucket as the night before it, which showed up as a night
+  // two hours longer than it was with a wake time in the evening.
+  type Piece = { source: string; label: string; from: number; to: number }
+  type Stretch = { start: number; end: number; pieces: Piece[] }
+  const GAP_MS = 60 * 60_000
+  const stretches: Stretch[] = []
 
-  for (const s of samples) {
-    const night = dayOf.format(new Date(s.endDate))
-    const source = String(s.sourceName ?? 'unknown')
-    const label = String(s.valueLabel ?? s.value)
-    const minutes = (new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 60000
+  const pieces = samples
+    .map((s) => ({
+      source: String(s.sourceName ?? 'unknown'),
+      label: String(s.valueLabel ?? s.value),
+      from: new Date(String(s.startDate)).getTime(),
+      to: new Date(String(s.endDate)).getTime(),
+    }))
+    .filter((p) => Number.isFinite(p.from) && Number.isFinite(p.to))
+    .sort((a, b) => a.from - b.from)
 
-    let bySource = nights.get(night)
-    if (!bySource) nights.set(night, (bySource = new Map()))
-    let n = bySource.get(source)
-    if (!n) bySource.set(source, (n = { start: s.startDate, end: s.endDate, stages: {}, asleep: 0 }))
-
-    n.stages[label] = (n.stages[label] ?? 0) + minutes
-    if (ASLEEP.has(label)) n.asleep += minutes
-    if (s.startDate < n.start) n.start = s.startDate
-    if (s.endDate > n.end) n.end = s.endDate
+  for (const piece of pieces) {
+    const current = stretches[stretches.length - 1]
+    if (current && piece.from - current.end <= GAP_MS) {
+      current.pieces.push(piece)
+      if (piece.to > current.end) current.end = piece.to
+      continue
+    }
+    stretches.push({ start: piece.from, end: piece.to, pieces: [piece] })
   }
 
-  const round = (m: number) => Math.round(m)
-  return [...nights.entries()]
-    .sort(([a], [b]) => b.localeCompare(a))
-    .map(([date, bySource]) => {
-      const [source, best] = [...bySource.entries()].sort(([, a], [, b]) => b.asleep - a.asleep)[0]!
-      return {
-        date,
+  interface Night {
+    date: string
+    source: string
+    otherSources: string[]
+    bedtime: string
+    wakeTime: string
+    asleepMinutes: number
+    inBedMinutes: number
+    stagesMinutes: Record<string, number>
+    naps: { time: string; asleepMinutes: number }[]
+  }
+
+  // One stretch can be covered by the phone and the watch at once; the fuller recording wins and
+  // the other is named, rather than both being added together.
+  const describe = (stretch: Stretch, date: string): Night => {
+    const bySource = new Map<string, Piece[]>()
+    for (const piece of stretch.pieces) bySource.set(piece.source, [...(bySource.get(piece.source) ?? []), piece])
+
+    const scored = [...bySource.entries()]
+      .map(([source, list]) => ({
         source,
-        otherSources: [...bySource.keys()].filter((s) => s !== source),
-        bedtime: best.start,
-        wakeTime: best.end,
-        asleepMinutes: round(best.asleep),
-        stagesMinutes: Object.fromEntries(Object.entries(best.stages).map(([k, v]) => [k, round(v)])),
+        list,
+        asleep: unionMinutes(list.filter((p) => ASLEEP.has(p.label))),
+      }))
+      .sort((a, b) => b.asleep - a.asleep)
+    const best = scored[0]!
+
+    const stages: Record<string, number> = {}
+    for (const label of new Set(best.list.map((p) => p.label))) {
+      stages[label] = Math.round(unionMinutes(best.list.filter((p) => p.label === label)))
+    }
+
+    return {
+      date,
+      source: best.source,
+      otherSources: scored.slice(1).map((s) => s.source),
+      bedtime: new Date(Math.min(...best.list.map((p) => p.from))).toISOString(),
+      wakeTime: new Date(Math.max(...best.list.map((p) => p.to))).toISOString(),
+      asleepMinutes: Math.round(best.asleep),
+      inBedMinutes: Math.round(unionMinutes(best.list)),
+      stagesMinutes: stages,
+      naps: [],
+    }
+  }
+
+  const nights = new Map<string, Night>()
+  const napsByDate = new Map<string, { time: string; asleepMinutes: number }[]>()
+
+  for (const stretch of stretches) {
+    const date = dayOf.format(new Date(stretch.end))
+    const night = describe(stretch, date)
+    const endedInTheMorning = Number(hourOf.format(new Date(stretch.end))) < NIGHT_ENDS_BEFORE_HOUR
+
+    if (endedInTheMorning || night.asleepMinutes >= NIGHT_MINUTES) {
+      // A night broken by an hour awake arrives as two stretches; they are the same night.
+      const existing = nights.get(date)
+      if (!existing) {
+        nights.set(date, night)
+        continue
       }
-    })
+      existing.asleepMinutes += night.asleepMinutes
+      existing.inBedMinutes += night.inBedMinutes
+      if (night.wakeTime > existing.wakeTime) existing.wakeTime = night.wakeTime
+      if (night.bedtime < existing.bedtime) existing.bedtime = night.bedtime
+      for (const [label, value] of Object.entries(night.stagesMinutes)) {
+        existing.stagesMinutes[label] = (existing.stagesMinutes[label] ?? 0) + value
+      }
+      continue
+    }
+
+    napsByDate.set(date, [...(napsByDate.get(date) ?? []), { time: night.wakeTime, asleepMinutes: night.asleepMinutes }])
+  }
+
+  for (const [date, naps] of napsByDate) {
+    const night = nights.get(date)
+    if (night) night.naps = naps
+    else {
+      nights.set(date, {
+        date,
+        source: 'unknown',
+        otherSources: [],
+        bedtime: naps[0]!.time,
+        wakeTime: naps[naps.length - 1]!.time,
+        asleepMinutes: 0,
+        inBedMinutes: 0,
+        stagesMinutes: {},
+        naps,
+      })
+    }
+  }
+
+  return [...nights.values()].sort((a, b) => b.date.localeCompare(a.date))
 }

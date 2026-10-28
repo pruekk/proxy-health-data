@@ -2,6 +2,7 @@
 // Spec: https://modelcontextprotocol.io/specification — supports initialize, ping, tools/list, tools/call.
 
 import { catalog } from './catalog'
+import { paceLabel, splitsFromDistance } from './splits'
 import { parseDateKeys, parseRange } from './dates'
 import { computeBattery } from './battery'
 import {
@@ -272,7 +273,7 @@ const tools: Tool[] = [
     name: 'get_sleep',
     title: 'Sleep',
     description:
-      'Nightly sleep: bedtime, wake time, total asleep minutes and minutes per stage (asleepCore, asleepDeep, asleepREM, awake, inBed). Nights are keyed by the local date sleep ended.',
+      'Nightly sleep: bedtime, wake time, total asleep minutes, time in bed, and minutes per stage (asleepCore, asleepDeep, asleepREM, awake, inBed). Nights are keyed by the local date sleep ended, and a night broken by an hour awake is reported as one night rather than two. Daytime sleep is listed separately under `naps` instead of being added to the night, which otherwise reads as a night hours longer than it was with a wake time in the evening.',
     inputSchema: { type: 'object', properties: { ...range } },
     run: async (uid, args) => {
       const r = parseRange(str(args.from), str(args.to), 7)
@@ -397,7 +398,7 @@ const tools: Tool[] = [
     name: 'get_workout_detail',
     title: 'Workout detail',
     description:
-      'One workout with its raw heart rate and speed series, covering the session plus a recovery tail after it ends. Use for heart-rate drift, time in heart-rate zones, how fast heart rate drops after stopping, and split or interval pacing. Get the id from get_workouts.',
+      'One workout with its per-kilometre splits and its raw heart rate and speed series, covering the session plus a recovery tail after it ends. Splits carry distance, elapsed seconds, pace in seconds per kilometre and the mean heart rate over that kilometre, so a second half that slowed down can be told apart from one where only the pulse rose. Also use for heart-rate drift, time in zones, and how fast heart rate drops after stopping. Get the id from get_workouts.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -421,9 +422,11 @@ const tools: Tool[] = [
       const to = new Date(new Date(String(workout.endDate)).getTime() + recovery * 60_000)
       const speedMetric = String(workout.activityTypeName) === 'cycling' ? 'cyclingSpeed' : 'runningSpeed'
 
-      const [heartRate, speed] = await Promise.all([
+      const [heartRate, speed, distance] = await Promise.all([
         querySamples(uid, 'heartRate', { from, to }, 2000),
         querySamples(uid, speedMetric, { from, to }, 2000),
+        // Only the workout itself, since the recovery tail would add a slow final split.
+        querySamples(uid, 'distanceWalkingRunning', { from, to: new Date(String(workout.endDate)) }, 2000),
       ])
       // Oldest first reads better as a time series than the newest-first default.
       const maxPoints = num(args.maxPoints, 400, 2000)
@@ -438,12 +441,20 @@ const tools: Tool[] = [
         return [...thinned, points[points.length - 1]!]
       }
 
+      const splits = splitsFromDistance(
+        distance.map((s) => ({ at: String(s.startDate), metres: Number(s.value) })),
+        heartRate.map((s) => ({ at: String(s.startDate), value: Number(s.value) })),
+      ).map((split) => ({ ...split, paceLabel: `${paceLabel(split.pace)}/km` }))
+
       return {
         workout,
         window: { from: from.toISOString(), to: to.toISOString(), recoveryMinutes: recovery },
+        splits,
         heartRate: { unit: 'count/min', count: heartRate.length, truncated: heartRate.length >= 2000, series: series(heartRate) },
         speed: { type: speedMetric, unit: 'm/s', count: speed.length, truncated: speed.length >= 2000, series: series(speed) },
-        note: 'count is the number of samples found; series may be thinned to maxPoints.',
+        note: splits.length
+          ? 'count is the number of samples found; series may be thinned to maxPoints. splits are per kilometre, pace in seconds per km, the last one usually partial.'
+          : 'count is the number of samples found; series may be thinned to maxPoints. No splits: this workout has no raw distance samples, which is the case for sessions recorded before distance was collected per workout.',
       }
     },
   },

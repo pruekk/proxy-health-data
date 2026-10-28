@@ -19,6 +19,10 @@ export interface ReadinessInputs {
   sleepTargetMinutes?: number
   /** When the night ended, in ISO. Not scored — it is the anchor the day's score is tied to. */
   wakeTime?: string
+  /** Whether `hrv` came from readings taken while asleep or from Apple's daily average. */
+  hrvSource?: 'sleep' | 'daily'
+  /** Nights of sleeping HRV available, which is what decides the source above. */
+  hrvNights?: number
 }
 
 export type FactorKey = 'hrv' | 'restingHeartRate' | 'sleep' | 'load'
@@ -38,6 +42,8 @@ export interface Factor {
   /** Shown next to the value in a lighter colour: sleep puts time in bed here, so the card
    *  reads "5:04/7:09" without needing to know what the note means. */
   secondary?: string
+  /** Where the number came from, when there is more than one possible source. */
+  source?: 'sleep' | 'daily'
   direction: 'good' | 'watch' | 'bad'
 }
 
@@ -71,6 +77,7 @@ export function computeReadiness(inputs: ReadinessInputs) {
       weight: WEIGHTS.hrv,
       value: round(inputs.hrv.latest),
       baseline: round(inputs.hrv.baseline),
+      source: inputs.hrvSource,
       deviation: `${percent >= 0 ? '+' : '−'}${Math.abs(round(percent, 0))}%`,
       changePercent: round(percent, 0),
       direction: percent >= -5 ? 'good' : percent >= -15 ? 'watch' : 'bad',
