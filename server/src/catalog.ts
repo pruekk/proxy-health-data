@@ -144,18 +144,28 @@ const display = {
  * constant is here so it can be tuned with a deploy instead of a rebuild.
  */
 const battery = {
-  /** Points a full night returns. A night at the target gives this much. */
-  sleepChargeFull: 55,
+  /** Returned per hour actually asleep. The level climbs through the night from wherever the
+   *  evening left it rather than resetting, which is what the reference device does: a 40%
+   *  bedtime and 6h19 of sleep wakes up at 78%. */
+  chargePerSleepHour: 6,
   sleepTargetMinutes: 480,
   /** Drained every waking hour before any activity. */
-  idleDrainPerHour: 2,
+  idleDrainPerHour: 1,
   /** Active kilocalories in an hour, divided by this, is the activity drain. */
-  activeEnergyDivisor: 20,
+  activeEnergyDivisor: 30,
   /** Heart rate this far above resting starts costing; the excess is divided by the next value. */
   hrStressOffset: 15,
-  hrStressDivisor: 10,
+  hrStressDivisor: 14,
   /** Returned per hour spent near resting heart rate with almost no movement. */
-  restChargePerHour: 2,
+  restChargePerHour: 1.5,
+  /** Daytime sleep charges at the same rate, but a nap cannot stand in for a night. */
+  napMinMinutes: 20,
+  napMaxCharge: 15,
+  napDailyMaxCharge: 20,
+  /** Nights simulated before today, so the level carried into this morning is itself earned. */
+  historyDays: 7,
+  /** Where the chain starts, before any history is known. */
+  seedLevel: 50,
   min: 0,
   max: 100,
 }

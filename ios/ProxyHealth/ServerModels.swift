@@ -124,6 +124,11 @@ struct ReadinessDoc: Codable, Sendable {
     }
 
     var score: Int?
+    /// Frozen for the day once the measured factors are in, so the number cannot drift.
+    var locked: Bool?
+    var computedAt: Date?
+    /// When the night ended — the morning this score is about.
+    var wakeTime: Date?
     var band: String?
     var bandLabel: String?
     var advice: String?
@@ -137,6 +142,9 @@ struct ReadinessDoc: Codable, Sendable {
     /// Shape for the loading state, shown redacted.
     static let placeholder = ReadinessDoc(
         score: 72,
+        locked: false,
+        computedAt: nil,
+        wakeTime: nil,
         band: "ready",
         bandLabel: "พร้อม",
         advice: "กำลังโหลด",
@@ -197,11 +205,18 @@ struct BatteryDoc: Codable, Sendable {
     }
 
     var level: Int
+    /// Where the level stood when last night began, and where the night brought it to.
+    var bedLevel: Int
+    var wakeLevel: Int
     var chargedOvernight: Int
+    var napCharge: Int
+    /// Signed: negative is the usual case; a nap or a very quiet day can make it positive.
+    var sinceWake: Int
     var drainedToday: Int
-    var afterSleep: Int
     var steps: [Step]
     var missing: [String]
+    /// A missing night or a day without hourly data had to be stood in for.
+    var estimated: Bool
     /// The coaching sentence, comparison included when there is enough history for one.
     var message: String?
     var advice: String?
@@ -209,7 +224,49 @@ struct BatteryDoc: Codable, Sendable {
 
     /// Placeholder for the loading state, shown redacted and colourless.
     static let placeholder = BatteryDoc(
-        level: 70, chargedOvernight: 50, drainedToday: 30, afterSleep: 90, steps: [], missing: [],
+        level: 62, bedLevel: 40, wakeLevel: 78, chargedOvernight: 38, napCharge: 0, sinceWake: -16,
+        drainedToday: 16, steps: [], missing: [], estimated: false,
         message: "กำลังคำนวณพลังงานที่เหลือ", advice: nil, basis: nil
     )
+}
+
+/// Keeps the day's frozen readiness on the device. The server computes it once at wake and locks
+/// it, so every later open would fetch a document that cannot have changed.
+enum ReadinessCache {
+    private static let key = "readiness.locked"
+    private static let dayKey = "readiness.lockedDay"
+
+    static func today() -> ReadinessDoc? {
+        guard UserDefaults.standard.string(forKey: dayKey) == dayStamp(),
+              let data = UserDefaults.standard.data(forKey: key)
+        else { return nil }
+        return try? decoder.decode(ReadinessDoc.self, from: data)
+    }
+
+    static func save(_ readiness: ReadinessDoc) {
+        guard let data = try? encoder.encode(readiness) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+        UserDefaults.standard.set(dayStamp(), forKey: dayKey)
+    }
+
+    /// Local day, since that is the day the server anchored the score to.
+    private static func dayStamp() -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
+
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+
+    private static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
 }

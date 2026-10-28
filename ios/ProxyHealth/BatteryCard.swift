@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// How much is left right now. Readiness answers "should I train hard today"; this answers
-/// "what is still in the tank". Everything comes from the server, constants included.
+/// "what is still in the tank". Twenty segments: lit for what is left, grey for what the day has
+/// spent, faint for what last night never charged — so the morning's level stays visible all day.
 struct BatteryCard: View {
     let battery: BatteryDoc
     var placeholder = false
@@ -18,75 +19,102 @@ struct BatteryCard: View {
                 .buttonStyle(.plain)
             }
 
-            gauge.padding(.top, 16)
+            headline.padding(.top, 10)
+            gauge.padding(.top, 14)
 
-            HStack(spacing: 10) {
-                stat("+\(battery.chargedOvernight)%", "ชาร์จเมื่อคืน", .green)
-                stat("−\(battery.drainedToday)%", "ใช้ไปวันนี้", .red)
-            }
-            .padding(.top, 14)
-
-            // The comparison and the advice in one sentence, from the server, so the card and the
-            // AI tools say the same thing.
             if let message = battery.message {
                 Text(message)
                     .font(.system(size: 12.5)).lineSpacing(2).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 12)
+                    .padding(.top, 13)
             }
             if !battery.missing.isEmpty {
-                Text("ยังขาด \(missingNames)")
+                Text("ยังขาด \(BatteryFormat.missingNames(battery.missing))")
                     .font(.system(size: 11)).foregroundStyle(.tertiary).padding(.top, 7)
             }
         }
         .sheet(isPresented: $explaining) { ReadinessInfoSheet(section: .battery) }
     }
 
-    /// A battery outline with the level inside it, centred on the whole cell rather than the
-    /// filled part, and the number and unit at the same size.
+    private var headline: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text("\(battery.level)").font(.system(size: 34, weight: .bold)).monospacedDigit()
+            Text("%").font(.system(size: 34, weight: .bold)).foregroundStyle(.secondary)
+            if battery.estimated {
+                Text("ประมาณ")
+                    .font(.system(size: 10, weight: .bold)).kerning(0.4)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Brand.plate, in: Capsule())
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 8)
+            }
+            Spacer(minLength: 10)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("เข้านอน \(battery.bedLevel)% → ตื่น \(battery.wakeLevel)%")
+                Text(BatterySegments.sinceWakeText(battery.sinceWake))
+            }
+            .font(.system(size: 11.5))
+            .foregroundStyle(.secondary)
+        }
+    }
+
     private var gauge: some View {
-        HStack(spacing: 3) {
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Brand.track)
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(placeholder ? AnyShapeStyle(Brand.track) : AnyShapeStyle(fillColor))
-                        // Empty means empty: the minimum width keeps a low level visible, but
-                        // showing a sliver at zero reads as "a bit left" when there is none.
-                        .frame(width: battery.level <= 0 ? 0 : max(18, geometry.size.width * Double(battery.level) / 100))
-                        .padding(2)
-                    HStack(alignment: .firstTextBaseline, spacing: 1) {
-                        Text("\(battery.level)").font(.system(size: 25, weight: .bold)).monospacedDigit()
-                        Text("%").font(.system(size: 25, weight: .bold))
-                    }
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.22), radius: 3, y: 1)
-                    .frame(maxWidth: .infinity)
+        VStack(spacing: 0) {
+            HStack(spacing: 3) {
+                ForEach(Array(BatterySegments.states(level: battery.level, wakeLevel: battery.wakeLevel).enumerated()), id: \.offset) { _, state in
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .fill(color(for: state))
+                        .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: 58)
-            Capsule().fill(Brand.track).frame(width: 5, height: 20)
+            .frame(height: 44)
+            markers.padding(.top, 7)
         }
     }
 
-    private var fillColor: LinearGradient {
-        let colors: [Color] = switch battery.level {
-        case ..<25: [.red.opacity(0.85), .red]
-        case ..<50: [.orange.opacity(0.85), .orange]
-        default: [Brand.exercise.opacity(0.85), Brand.exercise]
+    /// Each marker sits over its own value on the bar rather than in a caption underneath, and
+    /// the left one steps aside when the two would overlap.
+    private var markers: some View {
+        let collide = BatterySegments.markersCollide(level: battery.level, wakeLevel: battery.wakeLevel)
+        return GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                Text("0").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Text("100").font(.system(size: 11)).foregroundStyle(.tertiary)
+                    .frame(width: geometry.size.width, alignment: .trailing)
+                marker("ตอนนี้", battery.level, at: geometry.size.width, anchor: collide ? 0.92 : 0.5)
+                marker("ตื่นมา", battery.wakeLevel, at: geometry.size.width, anchor: 0.5)
+            }
         }
-        return LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
+        .frame(height: 30)
     }
 
-    private func stat(_ value: String, _ label: String, _ tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.system(size: 19, weight: .bold)).foregroundStyle(placeholder ? Color.secondary : tint)
-            Text(label).font(.system(size: 11.5)).foregroundStyle(.secondary)
+    private func marker(_ label: String, _ value: Int, at width: Double, anchor: Double) -> some View {
+        VStack(spacing: 3) {
+            Rectangle().fill(Brand.track).frame(width: 1, height: 8)
+            HStack(spacing: 3) {
+                Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("\(value)%").font(.system(size: 12, weight: .semibold)).monospacedDigit()
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 13).padding(.vertical, 11)
-        .background(Brand.plate, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .fixedSize()
+        .alignmentGuide(.leading) { $0.width * anchor }
+        .offset(x: width * Double(min(100, max(0, value))) / 100)
     }
 
-    private var missingNames: String { BatteryFormat.missingNames(battery.missing) }
+    private func color(for state: BatterySegments.State) -> Color {
+        if placeholder { return Brand.track }
+        return switch state {
+        case .filled: fillColor
+        case .used: Brand.track.opacity(0.95)
+        case .empty: Brand.track.opacity(0.4)
+        }
+    }
+
+    private var fillColor: Color {
+        return switch battery.level {
+        case ..<20: .red
+        case ..<50: .orange
+        default: Brand.exercise
+        }
+    }
 }

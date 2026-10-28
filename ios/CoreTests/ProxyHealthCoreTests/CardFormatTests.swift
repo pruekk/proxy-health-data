@@ -57,3 +57,44 @@ final class BatteryFormatTests: XCTestCase {
         XCTAssertEqual(BatteryFormat.missingNames([]), "")
     }
 }
+
+final class BatterySegmentTests: XCTestCase {
+    func testSegmentsSplitIntoLeftSpentAndNeverCharged() {
+        let states = BatterySegments.states(level: 40, wakeLevel: 80)
+        XCTAssertEqual(states.filter { $0 == .filled }.count, 8)
+        XCTAssertEqual(states.filter { $0 == .used }.count, 8)
+        XCTAssertEqual(states.filter { $0 == .empty }.count, 4)
+    }
+
+    func testAFullMorningLeavesNothingFaint() {
+        let states = BatterySegments.states(level: 55, wakeLevel: 100)
+        XCTAssertEqual(states.filter { $0 == .empty }.count, 0)
+        XCTAssertEqual(states.filter { $0 == .filled }.count, 11)
+    }
+
+    func testAnEmptyBatteryLightsNothing() {
+        XCTAssertEqual(BatterySegments.states(level: 0, wakeLevel: 70).filter { $0 == .filled }.count, 0)
+    }
+
+    func testANapAboveTheMorningDoesNotInvertTheBar() {
+        let states = BatterySegments.states(level: 75, wakeLevel: 70)
+        XCTAssertEqual(states.filter { $0 == .used }.count, 0)
+        XCTAssertEqual(states.filter { $0 == .filled }.count, 15)
+    }
+
+    func testOutOfRangeValuesAreClamped() {
+        XCTAssertEqual(BatterySegments.states(level: 140, wakeLevel: 140).filter { $0 == .filled }.count, 20)
+        XCTAssertEqual(BatterySegments.states(level: -10, wakeLevel: 50).filter { $0 == .filled }.count, 0)
+    }
+
+    func testMarkersCollideOnlyWhenClose() {
+        XCTAssertTrue(BatterySegments.markersCollide(level: 55, wakeLevel: 72))
+        XCTAssertFalse(BatterySegments.markersCollide(level: 42, wakeLevel: 78))
+    }
+
+    func testSinceWakeReadsAsSpentOrGained() {
+        XCTAssertEqual(BatterySegments.sinceWakeText(-36), "ใช้ไปแล้ว 36%")
+        XCTAssertEqual(BatterySegments.sinceWakeText(4), "เพิ่มขึ้น 4%")
+        XCTAssertEqual(BatterySegments.sinceWakeText(0), "ใช้ไปแล้ว 0%")
+    }
+}

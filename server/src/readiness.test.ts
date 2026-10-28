@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bandFor, computeReadiness } from './readiness'
+import { bandFor, computeReadiness, readinessIsComplete, shouldLockReadiness } from './readiness'
 
 // The numbers in these tests are the user's real values on 24 Oct 2026, so a change in the
 // formula shows up as a change in a score someone has actually seen.
@@ -187,5 +187,28 @@ describe('change against the baseline', () => {
   test('a factor sitting on its baseline reports zero', () => {
     const result = computeReadiness({ ...realDay, hrv: { latest: 62, baseline: 62 } })
     expect(result.factors.find((f) => f.key === 'hrv')?.changePercent).toBe(0)
+  })
+})
+
+describe('freezing the score for the day', () => {
+  test('locks as soon as the measured factors are in', () => {
+    expect(shouldLockReadiness([], 7)).toBe(true)
+    expect(shouldLockReadiness(['load'], 7)).toBe(true)
+  })
+
+  test('waits while a measured factor is still missing', () => {
+    expect(shouldLockReadiness(['sleep'], 7)).toBe(false)
+    expect(shouldLockReadiness(['hrv'], 9)).toBe(false)
+    expect(shouldLockReadiness(['restingHeartRate'], 11)).toBe(false)
+  })
+
+  test('stops waiting at midday so the number settles either way', () => {
+    expect(shouldLockReadiness(['sleep'], 12)).toBe(true)
+    expect(shouldLockReadiness(['sleep', 'hrv'], 15)).toBe(true)
+  })
+
+  test('load alone never holds it open', () => {
+    expect(readinessIsComplete(['load'])).toBe(true)
+    expect(readinessIsComplete(['sleep'])).toBe(false)
   })
 })

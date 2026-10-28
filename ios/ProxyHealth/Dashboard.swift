@@ -51,7 +51,10 @@ final class Dashboard {
         async let syncs: [SyncLogDoc]? = optional(client, "v1/syncs?limit=\(AppConfig.syncsLimit)")
         async let connectors: [ConnectorDoc]? = optional(client, "v1/connectors")
         async let serverSettings: ServerSettings? = optional(client, "v1/settings")
-        async let readiness: ReadinessDoc? = optional(client, "v1/readiness")
+        // Once the server has frozen the day's score there is nothing new to fetch until
+        // tomorrow, so a reopened app reads it from here instead of making the round trip.
+        let cachedReadiness = ReadinessCache.today()
+        async let readiness: ReadinessDoc? = cachedReadiness == nil ? optional(client, "v1/readiness") : nil
         async let battery: BatteryDoc? = optional(client, "v1/battery")
 
         if let metrics = await metrics {
@@ -64,7 +67,12 @@ final class Dashboard {
         if let serverSettings = await serverSettings { self.retentionYears = serverSettings.retentionYears }
         // Keep the last good value when a single read fails, like every other field here —
         // overwriting with nil made the readiness card vanish on a hiccup.
-        if let readiness = await readiness { self.readiness = readiness }
+        if let cachedReadiness {
+            self.readiness = cachedReadiness
+        } else if let readiness = await readiness {
+            self.readiness = readiness
+            if readiness.locked == true { ReadinessCache.save(readiness) }
+        }
         if let battery = await battery { self.battery = battery }
         self.error = failures.isEmpty ? nil : failures.joined(separator: " · ")
         self.loadedAt = Date()

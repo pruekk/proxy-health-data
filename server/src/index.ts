@@ -2,7 +2,6 @@ import { Elysia, t } from 'elysia'
 import { auth } from './auth'
 import { catalog } from './catalog'
 import { computeBattery } from './battery'
-import { computeReadiness } from './readiness'
 import { parseDateKeys, parseRange } from './dates'
 import { env } from './env'
 import { handleMcp } from './mcp'
@@ -13,9 +12,9 @@ import {
   DEFAULT_RETENTION_YEARS,
   applyRetention,
   collectBatteryInputs,
-  collectReadinessInputs,
   deleteAllData,
   getProfile,
+  getReadiness,
   getRetentionYears,
   ingest,
   listMetrics,
@@ -111,8 +110,9 @@ export const app = new Elysia()
         },
         { query: RangeQuery },
       )
-      // Training readiness: one number for "should I train hard today?".
-      .get('/readiness', async ({ uid }) => computeReadiness(await collectReadinessInputs(uid)))
+      // Training readiness: one number for "should I train hard today?". Computed once a day
+      // and then served from storage, so it does not drift between app opens.
+      .get('/readiness', ({ uid }) => getReadiness(uid))
       // How much is left right now, as opposed to how recovered the morning started.
       .get('/battery', async ({ uid }) => computeBattery(await collectBatteryInputs(uid)))
       .get(

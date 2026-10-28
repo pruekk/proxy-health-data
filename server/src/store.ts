@@ -10,7 +10,8 @@ import type {
   WorkoutInput,
 } from './schemas'
 import { catalog } from './catalog'
-import { computeBattery, type BatteryInputs } from './battery'
+import { computeBattery, groupSleep, type BatteryInputs } from './battery'
+import { computeReadiness, shouldLockReadiness } from './readiness'
 import type { ReadinessInputs } from './readiness'
 
 // Firestore layout
@@ -360,43 +361,130 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
     sleepMinutes,
     inBedMinutes,
     load,
+    wakeTime: lastNight?.wakeTime ? String(lastNight.wakeTime) : undefined,
   }
 }
 
-/**
- * Inputs for the body battery: last night's sleep, the resting pulse it is measured against, and
- * today's hourly energy and heart rate since waking.
- */
-/** Days of hourly history used for the "usual at this hour" comparison. */
-const BATTERY_HISTORY_DAYS = 7
+const readinessCol = (uid: string) => userRef(uid).collection('readiness')
 
+/**
+ * The day's readiness, computed once and then served from storage. The app and the MCP tools
+ * read the same document, so they cannot quote different numbers, and reopening the app costs
+ * one document read instead of ninety days of statistics.
+ */
+export async function getReadiness(uid: string) {
+  const timeZone = String((await getProfile(uid)).timeZone ?? 'UTC')
+  const now = new Date()
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+  const localHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hour12: false }).format(now))
+  const ref = readinessCol(uid).doc(date)
+
+  const stored = await ref.get()
+  if (stored.exists && stored.get('locked') === true) return plain(stored.data()!)
+
+  const inputs = await collectReadinessInputs(uid)
+  const result = computeReadiness(inputs)
+  const locked = shouldLockReadiness(result.missing, localHour)
+  const doc = {
+    ...result,
+    date,
+    wakeTime: inputs.wakeTime,
+    computedAt: now.toISOString(),
+    locked,
+    expiresAt: retentionExpiry(await getRetentionYears(uid), new Date(`${date}T00:00:00Z`)),
+  }
+  await ref.set(doc, { merge: true })
+  return plain(doc as DocumentData)
+}
+
+/**
+ * Sleep split into sessions rather than nights: samples closer together than an hour belong to
+ * the same stretch of sleep. `querySleep` groups by the local date a sample ends on, which puts
+ * an afternoon nap into the same bucket as the night before it — fine for a sleep report, wrong
+ * for a battery that charges per hour asleep.
+ */
+export async function sleepSessions(uid: string, range: Range) {
+  const samples = await querySamples(uid, 'sleepAnalysis', range, 5000)
+  const asleep = samples
+    .filter((s) => ASLEEP.has(String(s.valueLabel ?? s.value)))
+    .map((s) => ({ start: new Date(String(s.startDate)).getTime(), end: new Date(String(s.endDate)).getTime() }))
+    .filter((s) => Number.isFinite(s.start) && Number.isFinite(s.end))
+    .sort((a, b) => a.start - b.start)
+
+  const GAP_MS = 60 * 60_000
+  const sessions: { start: number; end: number; asleepMinutes: number }[] = []
+  for (const sample of asleep) {
+    const current = sessions[sessions.length - 1]
+    // Overlapping samples are the same minutes recorded by two sources, so time is counted from
+    // the union rather than by adding the pieces up.
+    if (current && sample.start - current.end <= GAP_MS) {
+      if (sample.end > current.end) {
+        current.asleepMinutes += (sample.end - Math.max(sample.start, current.end)) / 60_000
+        current.end = sample.end
+      }
+      continue
+    }
+    sessions.push({ start: sample.start, end: sample.end, asleepMinutes: (sample.end - sample.start) / 60_000 })
+  }
+  return sessions.map((s) => ({ ...s, asleepMinutes: Math.round(s.asleepMinutes) }))
+}
+
+/** Days of history simulated so the level carried into this morning is itself earned. */
+const BATTERY_HISTORY_DAYS = catalog.battery.historyDays
+/** Nights looked at when a missing night has to be stood in for. */
+const BATTERY_MEDIAN_NIGHTS = 14
+/** Sleep that ends before this local hour belongs to the night; later is a nap. A night broken
+ *  by an hour awake arrives as two sessions, and counting only the longer one would throw away
+ *  half the sleep — or worse, charge the larger half at the capped nap rate. */
+const NIGHT_ENDS_BEFORE_HOUR = 12
+
+/**
+ * Inputs for the body battery: one entry per day, oldest first, each with the night that ended
+ * that morning, any naps, and the hourly energy and heart rate while awake. The level is carried
+ * from one day to the next, so the chain has to be built rather than today alone.
+ */
 export async function collectBatteryInputs(uid: string): Promise<BatteryInputs> {
   const timeZone = String((await getProfile(uid)).timeZone ?? 'UTC')
   const now = new Date()
-  const key = (date: Date) =>
-    new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+  const dayFormat = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+  const hourFormat = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hour12: false })
+  const key = (date: Date) => dayFormat.format(date)
+  const hourOf = (date: Date) => Number(hourFormat.format(date))
   const today = key(now)
 
   const historyFrom = key(new Date(now.getTime() - BATTERY_HISTORY_DAYS * 86_400_000))
-  const [hourly, series, nights] = await Promise.all([
+  const [hourly, series, sessions] = await Promise.all([
     queryHourly(uid, historyFrom, today, ['activeEnergyBurned', 'heartRate']),
     dailySeries(uid, key(new Date(now.getTime() - 30 * 86_400_000)), today, ['restingHeartRate']),
-    querySleep(uid, { from: new Date(now.getTime() - (BATTERY_HISTORY_DAYS + 1) * 86_400_000), to: now }, timeZone),
+    sleepSessions(uid, { from: new Date(now.getTime() - (BATTERY_MEDIAN_NIGHTS + 1) * 86_400_000), to: now }),
   ])
 
-  const lastNight = nights
-    .filter((n): n is typeof n & { date: string } => typeof n.date === 'string')
-    .sort((a, b) => b.date.localeCompare(a.date))[0]
   const restingSeries = (series.restingHeartRate ?? []).map((p) => p.avg).filter((v): v is number => typeof v === 'number')
+  const restingHeartRate = restingSeries.length ? restingSeries[restingSeries.length - 1] : undefined
 
-  // Hours since waking. Before any sleep is known, the whole day counts.
-  const wokeAt = lastNight?.wakeTime ? new Date(String(lastNight.wakeTime)) : undefined
-  const firstHour = wokeAt && key(wokeAt) === today ? Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hour12: false }).format(wokeAt)) : 0
+  const { nights, wokeAt, naps } = groupSleep(
+    sessions.map((session) => ({
+      date: key(new Date(session.end)),
+      hour: hourOf(new Date(session.end)),
+      asleepMinutes: session.asleepMinutes,
+    })),
+    NIGHT_ENDS_BEFORE_HOUR,
+  )
 
-  const hoursOf = (day: { metrics?: unknown } | undefined, from: number) => {
-    const metrics = (day?.metrics ?? {}) as Record<string, Record<string, { sum?: number; avg?: number }>>
-    const hours: BatteryInputs['hours'] = []
-    for (let hour = from; hour <= 23; hour += 1) {
+  // A night the watch did not record is stood in for by the median of the nights it did, so the
+  // morning after a charging session is not reported as a night of no sleep at all.
+  const recent = [...nights.values()].sort((a, b) => a - b)
+  const medianNight = recent.length ? recent[Math.floor(recent.length / 2)] : undefined
+
+  const byDate = new Map(hourly.map((day) => [String((day as { date?: string }).date), day]))
+  const hoursOf = (date: string, from: number) => {
+    const metrics = ((byDate.get(date) as { metrics?: unknown } | undefined)?.metrics ?? {}) as Record<
+      string,
+      Record<string, { sum?: number; avg?: number }>
+    >
+    const hours: { hour: number; activeEnergyKcal?: number; heartRate?: number }[] = []
+    const last = date === today ? hourOf(now) : 23
+    for (let hour = from; hour <= last; hour += 1) {
       const energy = metrics.activeEnergyBurned?.[hour]?.sum
       const heartRate = metrics.heartRate?.[hour]?.avg
       if (energy === undefined && heartRate === undefined) continue
@@ -405,33 +493,24 @@ export async function collectBatteryInputs(uid: string): Promise<BatteryInputs> 
     return hours
   }
 
-  const byDate = new Map(hourly.map((day) => [String((day as { date?: string }).date), day]))
-  const sleepByDate = new Map(
-    nights
-      .filter((n): n is typeof n & { date: string } => typeof n.date === 'string')
-      .map((n) => [n.date, typeof n.asleepMinutes === 'number' ? n.asleepMinutes : undefined]),
-  )
-  const restingHeartRate = restingSeries.length ? restingSeries[restingSeries.length - 1] : undefined
-
-  // "Usual at this hour" is the same simulation run over the previous days, cut off at the
-  // current hour, so the comparison is like-for-like rather than against a whole-day average.
-  const hourNow = Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hour12: false }).format(now))
-  const past: number[] = []
-  for (let back = 1; back <= BATTERY_HISTORY_DAYS; back += 1) {
+  const days: BatteryInputs['days'] = []
+  for (let back = BATTERY_HISTORY_DAYS; back >= 0; back -= 1) {
     const date = key(new Date(now.getTime() - back * 86_400_000))
-    const day = byDate.get(date)
-    if (!day) continue
-    const hours = hoursOf(day, 0).filter((h) => h.hour <= hourNow)
-    if (!hours.length) continue
-    past.push(computeBattery({ sleepMinutes: sleepByDate.get(date), restingHeartRate, hours }).level)
+    const measured = nights.get(date)
+    const asleepMinutes = measured ?? medianNight
+    // Waking hour comes from the night that ended that morning; without one the day counts whole.
+    const wakeHour = wokeAt.get(date) ?? 0
+    days.push({
+      date,
+      asleepMinutes,
+      sleepEstimated: measured === undefined && asleepMinutes !== undefined,
+      naps: naps.get(date) ?? [],
+      hours: hoursOf(date, wakeHour),
+      restingHeartRate,
+    })
   }
 
-  return {
-    sleepMinutes: typeof lastNight?.asleepMinutes === 'number' ? lastNight.asleepMinutes : undefined,
-    restingHeartRate,
-    hours: hoursOf(byDate.get(today), firstHour),
-    usualAtThisHour: past.length ? past.reduce((sum, level) => sum + level, 0) / past.length : undefined,
-  }
+  return { days, hourNow: hourOf(now) }
 }
 
 // ---------- retention backfill ----------

@@ -17,6 +17,8 @@ export interface ReadinessInputs {
   load?: { acute: number; chronic: number }
   /** Target night's sleep in minutes. */
   sleepTargetMinutes?: number
+  /** When the night ended, in ISO. Not scored — it is the anchor the day's score is tied to. */
+  wakeTime?: string
 }
 
 export type FactorKey = 'hrv' | 'restingHeartRate' | 'sleep' | 'load'
@@ -187,4 +189,20 @@ function reasonFor(factors: Factor[]): string {
     .sort((a, b) => a.score - b.score)
     .slice(0, 2)
   return concerning.map((f) => REASONS[f.key](f)).join(' และ ')
+}
+
+/**
+ * Whether the score can be frozen for the day. Readiness answers "how recovered did this morning
+ * start", so recomputing it at lunchtime with a fresh pulse reading changes the answer to a
+ * question nobody asked. It is locked as soon as the three measured factors are in; load is not
+ * waited for, since a day with no exercise history would never complete.
+ */
+export const READINESS_LOCK_HOUR = 12
+
+export function readinessIsComplete(missing: string[]) {
+  return !missing.some((key) => key === 'hrv' || key === 'restingHeartRate' || key === 'sleep')
+}
+
+export function shouldLockReadiness(missing: string[], localHour: number) {
+  return readinessIsComplete(missing) || localHour >= READINESS_LOCK_HOUR
 }

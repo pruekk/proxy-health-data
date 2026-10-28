@@ -45,3 +45,4 @@ describe('hourly documents', () => {
     expect(hourlyDocs([]).size).toBe(0)
   })
 })
+

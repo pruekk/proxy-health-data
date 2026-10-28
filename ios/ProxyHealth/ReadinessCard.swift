@@ -15,8 +15,12 @@ struct ReadinessCard: View {
             HStack {
                 Text("ความพร้อมซ้อม").font(.system(size: 10.5, weight: .bold)).kerning(0.9).foregroundStyle(.secondary)
                 Spacer()
+                // Says the number will not move on its own, which is the whole point of
+                // computing it once at wake rather than on every app open.
+                if let stamp { Text(stamp).font(.system(size: 10.5)).foregroundStyle(.tertiary) }
                 if !readiness.missing.isEmpty {
                     Text("ขาด \(readiness.missingNames)").font(.system(size: 10.5)).foregroundStyle(.tertiary)
+                        .padding(.leading, 6)
                 }
                 Button { explaining = true } label: {
                     Image(systemName: "info.circle")
@@ -64,6 +68,13 @@ struct ReadinessCard: View {
     }
 
     private var sheet: some View { ReadinessInfoSheet() }
+
+    private var stamp: String? {
+        guard let at = readiness.wakeTime ?? readiness.computedAt else { return nil }
+        let time = at.formatted(date: .omitted, time: .shortened)
+        let label = readiness.wakeTime == nil ? "คิดเมื่อ" : "คิดตอนตื่น"
+        return readiness.locked == true ? "\(label) \(time) · คงที่ทั้งวัน" : "\(label) \(time)"
+    }
 
     private func dial(_ score: Int) -> some View {
         ZStack {

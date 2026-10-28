@@ -61,3 +61,38 @@ public enum BatteryFormat {
         .joined(separator: ", ")
     }
 }
+
+/// The body-battery gauge, worked out as plain numbers so the bar can be checked without a
+/// screenshot. Twenty segments of five points each: lit for what is left, grey for what the day
+/// has spent, faint for what the night never charged.
+public enum BatterySegments {
+    public enum State: Equatable {
+        case filled, used, empty
+    }
+
+    public static let count = 20
+
+    public static func states(level: Int, wakeLevel: Int, count: Int = count) -> [State] {
+        let now = max(0, min(100, level))
+        // A nap can lift the level above where the morning started; the bar should not then
+        // claim the day used a negative amount.
+        let wake = max(now, min(100, wakeLevel))
+        let step = 100.0 / Double(count)
+        return (0..<count).map { index in
+            let upper = Double(index + 1) * step
+            if upper <= Double(now) + 0.001 { return .filled }
+            if upper <= Double(wake) + 0.001 { return .used }
+            return .empty
+        }
+    }
+
+    /// True when the two markers would print on top of each other and the left one has to move.
+    public static func markersCollide(level: Int, wakeLevel: Int, minimumGap: Int = 18) -> Bool {
+        abs(wakeLevel - level) < minimumGap
+    }
+
+    /// "ใช้ไปแล้ว 36%" or "เพิ่มขึ้น 4%" — a nap makes the second one possible.
+    public static func sinceWakeText(_ sinceWake: Int) -> String {
+        sinceWake > 0 ? "เพิ่มขึ้น \(sinceWake)%" : "ใช้ไปแล้ว \(abs(sinceWake))%"
+    }
+}

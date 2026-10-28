@@ -296,6 +296,11 @@ LEVEL=$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["leve
 check "level is within range" "1" "$([ "$LEVEL" -ge 0 ] && [ "$LEVEL" -le 100 ] && echo 1 || echo 0)"
 check "the night charged something" "1" "$(echo "$R" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["chargedOvernight"] > 0 else 0)')"
 check "the day drained something" "1" "$(echo "$R" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["drainedToday"] > 0 else 0)')"
+# The night can only add, and a level already at 100 cannot rise further — which is what this
+# user's history does, since its earlier days have no hourly data to drain against.
+check "the night never costs anything" "1" "$(echo "$R" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(1 if d["wakeLevel"] >= d["bedLevel"] else 0)')"
+check "waking level is where the day started" "1" "$(echo "$R" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(1 if d["wakeLevel"] == d["level"] - d["sinceWake"] else 0)')"
+check "the day has cost something since waking" "1" "$(echo "$R" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["sinceWake"] < 0 else 0)')"
 check "carries a coaching line" "1" "$(echo "$R" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin).get("message") else 0)')"
 check "says it is not Garmin" "1" "$(echo "$R" | grep -ci 'Garmin')"
 check "REST route agrees with the tool" "$LEVEL" "$(curl -s $B/v1/battery -H "$EST_AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)["level"])')"
@@ -348,6 +353,29 @@ DAY=$(curl -s "$B/v1/daily?from=2026-03-01&to=2026-03-01" -H "$EST_AUTH")
 check "resting pulse survives" "58" "$(echo "$DAY" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["metrics"]["restingHeartRate"]["avg"])')"
 check "exercise minutes survive" "42" "$(echo "$DAY" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["metrics"]["appleExerciseTime"]["sum"])')"
 check "the rings landed too" "700" "$(echo "$DAY" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["activity"]["activeEnergyKcal"])')"
+
+echo "19. readiness is computed once a day and then frozen"
+R1=$(curl -s $B/v1/readiness -H "$AUTH")
+check "locked once the measured factors are in" "True" "$(echo "$R1" | python3 -c 'import sys,json;print(json.load(sys.stdin)["locked"])')"
+check "carries the time it was computed" "1" "$(echo "$R1" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin).get("computedAt") else 0)')"
+STAMP=$(echo "$R1" | python3 -c 'import sys,json;print(json.load(sys.stdin)["computedAt"])')
+# New data landing later must not move today's score.
+python3 - "$B" "$TOKEN" <<'PY2'
+import json, sys, urllib.request
+from datetime import date
+base, token = sys.argv[1], sys.argv[2]
+req = urllib.request.Request(base + "/v1/sync",
+    data=json.dumps({"dailyStats": [
+        {"date": date.today().isoformat(), "type": "heartRateVariabilitySDNN", "unit": "ms", "avg": 120},
+        {"date": date.today().isoformat(), "type": "restingHeartRate", "unit": "count/min", "avg": 48}]}).encode(),
+    headers={"content-type": "application/json", "authorization": "Bearer " + token})
+urllib.request.urlopen(req)
+print("  synced a much better HRV and pulse after the score was frozen")
+PY2
+R2=$(curl -s $B/v1/readiness -H "$AUTH")
+check "the score does not move" "$(echo "$R1" | python3 -c 'import sys,json;print(json.load(sys.stdin)["score"])')" "$(echo "$R2" | python3 -c 'import sys,json;print(json.load(sys.stdin)["score"])')"
+check "nor the time it was computed" "$STAMP" "$(echo "$R2" | python3 -c 'import sys,json;print(json.load(sys.stdin)["computedAt"])')"
+check "the tool agrees with the route" "$(echo "$R2" | python3 -c 'import sys,json;print(json.load(sys.stdin)["score"])')" "$(call get_training_readiness '{}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["score"])')"
 
 echo
 echo "passed: $pass  failed: $fail"

@@ -4,7 +4,9 @@
 #   bun install
 #   test/run.sh            # starts the emulator, the server, runs every suite, cleans up
 #
-# Needs: bun, java 21+ for the emulator (or `npx firebase-tools@13` with java 17), python3, curl.
+# Needs: bun, java for the emulator, python3, curl, and the Firebase CLI — an installed `firebase`
+# is used when there is one, since fetching the package on every run was the only part of this
+# that could hang, and a hung fetch looks exactly like a hung test run.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
@@ -61,7 +63,22 @@ class H(BaseHTTPRequestHandler):
 HTTPServer(('127.0.0.1', 3031), H).serve_forever()
 PY
 
-(cd "$TMP/emu" && npx -y firebase-tools@13.35.1 emulators:start --only firestore --project proxy-health-data > "$TMP/emu.log" 2>&1) &
+# The emulator is a JVM program, and the Firebase CLI finds the JVM through JAVA_HOME rather
+# than the path: without it macOS answers with its /usr/bin/java stub, which exists and then
+# refuses to run ("Unable to locate a Java Runtime").
+if [ -z "${JAVA_HOME:-}" ] || [ ! -x "${JAVA_HOME:-}/bin/java" ]; then
+  # Newest first: current firebase-tools refuses to start on anything before JDK 21.
+  for jdk in /opt/homebrew/opt/openjdk /opt/homebrew/opt/openjdk@23 /opt/homebrew/opt/openjdk@21 /opt/homebrew/opt/openjdk@17; do
+    [ -x "$jdk/bin/java" ] && export JAVA_HOME="$jdk" && export PATH="$jdk/bin:$PATH" && break
+  done
+fi
+"${JAVA_HOME:-}/bin/java" -version > /dev/null 2>&1 || java -version > /dev/null 2>&1 || {
+  echo "no working java — the Firestore emulator needs JDK 21 or newer (brew install openjdk)" >&2
+  exit 1
+}
+
+FIREBASE=$(command -v firebase || echo "bunx firebase-tools@13.35.1")
+(cd "$TMP/emu" && $FIREBASE emulators:start --only firestore --project proxy-health-data > "$TMP/emu.log" 2>&1) &
 echo "waiting for the Firestore emulator…"
 until grep -q "All emulators ready" "$TMP/emu.log" 2>/dev/null; do
   grep -qi "error" "$TMP/emu.log" && { tail -5 "$TMP/emu.log"; exit 1; }
