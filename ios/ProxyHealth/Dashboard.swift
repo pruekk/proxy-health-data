@@ -11,7 +11,9 @@ final class Dashboard {
     var workouts: [WorkoutDoc] = []
     var syncs: [SyncLogDoc] = []
     var connectors: [ConnectorDoc] = []
-    var retentionYears = 1
+    /// Windows per retention group, and the group metadata that describes them.
+    var retention: [String: Int] = [:]
+    var retentionGroups: [RetentionGroup] = []
     var readiness: ReadinessDoc?
     var battery: BatteryDoc?
     /// Reports this device wrote, shown immediately so the history does not wait for the server
@@ -64,7 +66,10 @@ final class Dashboard {
         if let workouts = await workouts { self.workouts = workouts }
         if let syncs = await syncs { self.syncs = syncs }
         if let connectors = await connectors { self.connectors = connectors }
-        if let serverSettings = await serverSettings { self.retentionYears = serverSettings.retentionYears }
+        if let serverSettings = await serverSettings {
+            self.retention = serverSettings.retention
+            self.retentionGroups = serverSettings.groups
+        }
         // Keep the last good value when a single read fails, like every other field here —
         // overwriting with nil made the readiness card vanish on a hiccup.
         if let cachedReadiness {
@@ -119,6 +124,33 @@ final class Dashboard {
     var today: DailyDoc? { days.last }
 
     func metric(_ type: String) -> MetricSummary? { metrics[type] }
+
+    /// Everything stored, when the counts have been loaded.
+    var totalDocuments: Int? {
+        let counted = metrics.values.compactMap(\.count)
+        return counted.isEmpty ? nil : counted.reduce(0, +)
+    }
+
+    /// Documents stored for a group, summed from the per-metric counts already loaded.
+    func documentCount(in group: String) -> Int {
+        let keys = AppConfig.metricKeys(in: group)
+        return metrics.values.filter { keys.contains($0.type) }.reduce(0) { $0 + ($1.count ?? 0) }
+    }
+
+    /// How long this metric is kept, in the group's own words — "7 วัน", "5 ปี".
+    func windowLabel(for type: String) -> String {
+        guard let group = retentionGroups.first(where: { AppConfig.metricKeys(in: $0.id).contains(type) })
+        else { return "—" }
+        return "เก็บ " + group.label(retention[group.id] ?? group.default)
+    }
+
+    /// The metrics in a group that actually hold something, largest first.
+    func storedMetrics(in group: String) -> [MetricSummary] {
+        let keys = AppConfig.metricKeys(in: group)
+        return metrics.values
+            .filter { keys.contains($0.type) && ($0.count ?? 0) > 0 }
+            .sorted { ($0.count ?? 0) > ($1.count ?? 0) }
+    }
 
     /// Change in a metric over the loaded window, using the daily aggregates so a value that is
     /// only recorded now and then still produces a trend.

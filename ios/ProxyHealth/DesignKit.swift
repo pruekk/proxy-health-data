@@ -253,6 +253,11 @@ extension Double {
     }
 }
 
+extension Int {
+    /// Grouped for reading: 68000 -> "68,000".
+    func formatted(_ decimals: Int = 0) -> String { Double(self).formatted(decimals) }
+}
+
 extension Date {
     /// "3 นาทีที่แล้ว", "เมื่อวาน", "15 ต.ค."
     var relativeThai: String { RelativeThai.describe(self) }

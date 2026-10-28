@@ -12,6 +12,14 @@ import type {
 import { catalog } from './catalog'
 import { computeBattery, groupSleep, type BatteryInputs } from './battery'
 import { loadWindows } from './load'
+import {
+  aggregateWindow,
+  usesRawWindow,
+  defaults as retentionDefaults,
+  sampleWindow,
+  settingsFrom,
+  type RetentionSettings,
+} from './retention'
 import { computeReadiness, shouldLockReadiness } from './readiness'
 import type { ReadinessInputs } from './readiness'
 
@@ -23,8 +31,6 @@ import type { ReadinessInputs } from './readiness'
 //   users/{uid}/daily/{yyyy-MM-dd}               per-day aggregates (metrics.*) + activity rings (activity)
 
 const BATCH_LIMIT = 450
-/** Years of raw samples kept when the user has not chosen otherwise. */
-export const DEFAULT_RETENTION_YEARS = 2
 /** Documents read per page when stamping expiry, so memory does not track collection size. */
 const RETENTION_PAGE_SIZE = 1000
 /** Work budget per request; the caller resumes from the returned cursor. */
@@ -37,9 +43,6 @@ const workoutsCol = (uid: string) => userRef(uid).collection('workouts')
 const dailyCol = (uid: string) => userRef(uid).collection('daily')
 const hourlyCol = (uid: string) => userRef(uid).collection('hourly')
 const syncsCol = (uid: string) => userRef(uid).collection('syncs')
-
-/** Metrics whose raw samples only live for a few days unless recorded during a workout. */
-const SHORT_RETENTION = new Set(catalog.quantities.filter((q) => q.retention === 'short').map((q) => q.key))
 
 type Op = (batch: WriteBatch) => void
 
@@ -82,19 +85,18 @@ function toTimestamp(iso: string): Timestamp {
 // High-frequency metrics (hundreds of samples a day) only keep a short raw window — the hourly
 // and daily aggregates carry the long view. Samples recorded during a workout are exempt, so a
 // run stays reviewable for as long as the workout itself.
-export function sampleExpiry(s: SampleInput, retentionYears: number): Timestamp | undefined {
-  if (retentionYears <= 0) return undefined
-  const short = SHORT_RETENTION.has(s.type) && s.context !== 'workout'
-  const days = short ? catalog.sync.shortRetentionDays : retentionYears * 365.25
-  return Timestamp.fromMillis(new Date(s.startDate).getTime() + days * 86_400_000)
+export function sampleExpiry(s: SampleInput, retention: RetentionSettings): Timestamp {
+  const window = sampleWindow(s.type, s.context === 'workout', retention)
+  return Timestamp.fromMillis(new Date(s.startDate).getTime() + window)
 }
 
-const retentionExpiry = (retentionYears: number, from: Date) =>
-  retentionYears > 0 ? Timestamp.fromMillis(from.getTime() + retentionYears * 365.25 * 86_400_000) : undefined
+/** Aggregates, workouts and the day's computed documents all follow the training window. */
+const retentionExpiry = (retention: RetentionSettings, from: Date) =>
+  Timestamp.fromMillis(from.getTime() + aggregateWindow(retention))
 
-function sampleDoc(s: SampleInput, retentionYears: number): DocumentData {
+function sampleDoc(s: SampleInput, retention: RetentionSettings): DocumentData {
   return {
-    expiresAt: sampleExpiry(s, retentionYears),
+    expiresAt: sampleExpiry(s, retention),
     context: s.context,
     kind: s.kind,
     value: s.value,
@@ -109,13 +111,13 @@ function sampleDoc(s: SampleInput, retentionYears: number): DocumentData {
   }
 }
 
-function workoutDoc(w: WorkoutInput, retentionYears: number): DocumentData {
+function workoutDoc(w: WorkoutInput, retention: RetentionSettings): DocumentData {
   const { id, startDate, endDate, ...rest } = w
   return {
     ...rest,
     startDate: toTimestamp(startDate),
     endDate: toTimestamp(endDate),
-    expiresAt: retentionExpiry(retentionYears, new Date(startDate)),
+    expiresAt: retentionExpiry(retention, new Date(startDate)),
   }
 }
 
@@ -154,19 +156,26 @@ export function dailyDocs(stats: DailyStatInput[], rings: ActivitySummaryInput[]
   return days
 }
 
-export async function getRetentionYears(uid: string): Promise<number> {
+/**
+ * Retention per group, filled in from the defaults. A profile saved before groups existed keeps
+ * its single choice for every group measured in years.
+ */
+export async function getRetention(uid: string): Promise<RetentionSettings> {
   const snap = await userRef(uid).get()
-  const value = snap.get('retentionYears')
-  return typeof value === 'number' ? value : DEFAULT_RETENTION_YEARS
+  const legacy = snap.get('retentionYears')
+  return settingsFrom(snap.get('retention'), typeof legacy === 'number' ? legacy : undefined)
 }
 
-export async function setRetentionYears(uid: string, years: number) {
-  await userRef(uid).set({ retentionYears: years }, { merge: true })
+export async function setRetention(uid: string, changes: Partial<RetentionSettings>) {
+  const current = await getRetention(uid)
+  const next = { ...current, ...changes }
+  await userRef(uid).set({ retention: next }, { merge: true })
+  return next
 }
 
 export async function ingest(uid: string, body: SyncBody) {
   const now = FieldValue.serverTimestamp()
-  const retentionYears = await getRetentionYears(uid)
+  const retention = await getRetention(uid)
   const ops: Op[] = []
   // Per type: the newest sample and a count per recording source, both denormalised onto the
   // metric document below so reads never fan out one query per metric.
@@ -176,7 +185,7 @@ export async function ingest(uid: string, body: SyncBody) {
   >()
 
   for (const s of body.samples ?? []) {
-    const doc = sampleDoc(s, retentionYears)
+    const doc = sampleDoc(s, retention)
     ops.push((b) => b.set(samplesCol(uid, s.type).doc(s.id), doc))
     const entry = touchedMetrics.get(s.type) ?? {
       kind: s.kind,
@@ -238,20 +247,20 @@ export async function ingest(uid: string, body: SyncBody) {
 
 
   for (const w of body.workouts ?? []) {
-    const doc = workoutDoc(w, retentionYears)
+    const doc = workoutDoc(w, retention)
     ops.push((b) => b.set(workoutsCol(uid).doc(w.id), doc))
   }
   for (const id of body.deletedWorkoutIds ?? []) ops.push((b) => b.delete(workoutsCol(uid).doc(id)))
 
   const days = dailyDocs(body.dailyStats ?? [], body.activitySummaries ?? [])
   for (const [date, doc] of days) {
-    const expiresAt = retentionExpiry(retentionYears, new Date(`${date}T00:00:00Z`))
+    const expiresAt = retentionExpiry(retention, new Date(`${date}T00:00:00Z`))
     ops.push((b) => b.set(dailyCol(uid).doc(date), { ...doc, expiresAt, updatedAt: now }, { merge: true }))
   }
 
   const hours = hourlyDocs(body.hourlyStats ?? [])
   for (const [date, doc] of hours) {
-    const expiresAt = retentionExpiry(retentionYears, new Date(`${date}T00:00:00Z`))
+    const expiresAt = retentionExpiry(retention, new Date(`${date}T00:00:00Z`))
     ops.push((b) => b.set(hourlyCol(uid).doc(date), { ...doc, expiresAt, updatedAt: now }, { merge: true }))
   }
 
@@ -482,7 +491,7 @@ export async function getReadiness(uid: string) {
     wakeTime: inputs.wakeTime,
     computedAt: now.toISOString(),
     locked,
-    expiresAt: retentionExpiry(await getRetentionYears(uid), new Date(`${date}T00:00:00Z`)),
+    expiresAt: retentionExpiry(await getRetention(uid), new Date(`${date}T00:00:00Z`)),
   }
   await ref.set(doc, { merge: true })
   return plain(doc as DocumentData)
@@ -679,9 +688,7 @@ export async function collectBatteryInputs(uid: string): Promise<BatteryInputs> 
  */
 export async function applyRetention(uid: string, scope: string, dryRun: boolean, after?: string) {
   const started = Date.now()
-  const years = await getRetentionYears(uid)
-  const longMs = years * 365.25 * 86_400_000
-  const shortMs = catalog.sync.shortRetentionDays * 86_400_000
+  const retention = await getRetention(uid)
   let scanned = 0
   let stamped = 0
   // Batched commits rather than a BulkWriter: the same path ingest uses, and a failed write
@@ -690,8 +697,8 @@ export async function applyRetention(uid: string, scope: string, dryRun: boolean
 
   // Only ever brings an expiry forward. A document that already expires sooner than the rule
   // would set is left alone, so re-running this can never resurrect data.
-  const stamp = (ref: FirebaseFirestore.DocumentReference, at: number, keepLong: boolean, current?: Timestamp) => {
-    const target = at + (keepLong ? longMs : shortMs)
+  const stamp = (ref: FirebaseFirestore.DocumentReference, at: number, window: number, current?: Timestamp) => {
+    const target = at + window
     if (current && current.toMillis() <= target) return
     stamped += 1
     if (!dryRun) ops.push((b) => b.set(ref, { expiresAt: Timestamp.fromMillis(target) }, { merge: true }))
@@ -708,9 +715,9 @@ export async function applyRetention(uid: string, scope: string, dryRun: boolean
 
   // Workout windows are needed to tell which high-frequency samples survive the short window.
   // Loaded once: there are tens of them, not tens of thousands.
-  const short = !isDated && SHORT_RETENTION.has(scope)
+  const rawWindowed = !isDated && usesRawWindow(scope)
   let intervals: { from: number; to: number }[] = []
-  if (short) {
+  if (rawWindowed) {
     const workouts = await workoutsCol(uid).get()
     intervals = workouts.docs.map((d) => ({
       from: (d.get('startDate') as Timestamp).toMillis(),
@@ -740,8 +747,11 @@ export async function applyRetention(uid: string, scope: string, dryRun: boolean
       const start = doc.get('startDate') as Timestamp | undefined
       const at = isDated && !start ? new Date(`${doc.id}T00:00:00Z`).getTime() : start?.toMillis()
       if (at === undefined || !Number.isFinite(at)) continue
-      const keepLong = !short || doc.get('context') === 'workout' || intervals.some((i) => at >= i.from && at <= i.to)
-      stamp(doc.ref, at, keepLong, current)
+      const inWorkout = doc.get('context') === 'workout' || intervals.some((i) => at >= i.from && at <= i.to)
+      const window = isDated
+        ? aggregateWindow(retention)
+        : sampleWindow(scope, rawWindowed && inWorkout, retention)
+      stamp(doc.ref, at, window, current)
     }
 
     if (ops.length) {
@@ -757,7 +767,7 @@ export async function applyRetention(uid: string, scope: string, dryRun: boolean
 
   if (ops.length) await commit(ops)
   // `done: false` means the budget ran out; call again with `after` to carry on.
-  return { scope, scanned, stamped, retentionYears: years, dryRun, done, after: done ? undefined : cursor }
+  return { scope, scanned, stamped, retention, dryRun, done, after: done ? undefined : cursor }
 }
 
 // ---------- destructive ----------

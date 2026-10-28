@@ -136,7 +136,7 @@ struct HistoryView: View {
     private var coverage: some View {
         VStack(spacing: 0) {
             SectionTitle(text: "ความครอบคลุม")
-            Text("ข้อมูลดิบที่บันทึกถี่มากเก็บ \(AppConfig.shortRetentionDays) วัน ยกเว้นช่วงที่ออกกำลังกาย ที่เหลือเก็บ \(dashboard.retentionYears) ปีตามที่ตั้งไว้")
+            Text("แต่ละกลุ่มเก็บไม่เท่ากันตามที่ตั้งไว้ในแท็บตั้งค่า — ข้อมูลดิบที่บันทึกถี่มากเก็บสั้นที่สุด ยกเว้นช่วงที่ออกกำลังกายซึ่งเก็บเท่ากลุ่มการซ้อม")
                 .font(.system(size: 12)).lineSpacing(2).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 2).padding(.bottom, 10)
@@ -167,14 +167,11 @@ struct HistoryView: View {
 
     /// Reads as "what it is, how it is kept, when it last arrived" rather than raw metric keys.
     private var coverageRows: [CoverageRow] {
-        // Which rows, their names and which ones are on the short window all come from the
-        // server catalog, so retention changes show up without a rebuild.
-        let shortWindow = AppConfig.shortRetentionKeys
-        return AppConfig.display.coverage.compactMap { item in
+        // Which rows, their names and the window each one is on all come from the server, so a
+        // retention change shows up here without a rebuild.
+        return AppConfig.display.coverage.compactMap { (item: RemoteCatalog.Row) -> CoverageRow? in
             guard let metric = dashboard.metric(item.key) else { return nil }
-            let kept = shortWindow.contains(item.key)
-                ? "เก็บ \(AppConfig.shortRetentionDays) วัน"
-                : "เก็บ \(dashboard.retentionYears) ปี"
+            let kept = dashboard.windowLabel(for: item.key)
             let count = metric.count.map { "\($0) รายการ" } ?? "—"
             return CoverageRow(
                 type: item.key,

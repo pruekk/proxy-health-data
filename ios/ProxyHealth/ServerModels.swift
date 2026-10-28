@@ -90,9 +90,25 @@ struct ConnectorDoc: Codable, Sendable, Identifiable {
     var id: String { clientId }
 }
 
+/// Retention, decided per group. The groups, their windows and the wording all come from the
+/// server catalog, so adding one is a deploy rather than a rebuild.
 struct ServerSettings: Codable, Sendable {
-    var retentionYears: Int
-    var defaultRetentionYears: Int?
+    var retention: [String: Int]
+    var groups: [RetentionGroup]
+    var defaults: [String: Int]?
+}
+
+struct RetentionGroup: Codable, Sendable, Identifiable {
+    var id: String
+    var name: String
+    var summary: String
+    /// `days` or `years`: raw signals are measured in days, everything else in years.
+    var unit: String
+    var options: [Int]
+    var `default`: Int
+    var note: String
+
+    func label(_ value: Int) -> String { unit == "days" ? "\(value) วัน" : "\(value) ปี" }
 }
 
 struct ReadinessDoc: Codable, Sendable {

@@ -169,14 +169,20 @@ minutes, flights, daylight) upload no individual samples at all. Each one is an 
 carried by the hourly and daily aggregates, which the phone computes with the same statistics
 query and which are already de-duplicated across iPhone, Watch and third-party sources.
 
+Retention is set per group — raw high-frequency signals in days, recovery, training, body and
+events in years — because a day of raw heart rate is hundreds of documents the hourly buckets
+already summarise, while a weigh-in is one a month that only means anything as a multi-year line.
+Samples recorded during a workout follow the training window however high-frequency they are.
+Nothing is kept forever: this service is a copy, Apple Health holds the original, and a full
+re-sync brings back whatever Health still has.
+
 Expiry is written per document at ingest and swept by Firestore TTL policies on `expiresAt`, so
 nothing runs on a schedule. Two consequences worth knowing: TTL deletes within about 24 hours of
 expiry rather than at the moment, and a document keeps the expiry it was written with — changing
 the retention later only affects new writes. `POST /v1/retention/apply?scope=…` re-stamps what is already
 stored — run it after deploying and before switching the TTL policies on. It reads a page of
 documents at a time so memory does not track collection size, and returns `done: false` with an
-`after` cursor when it runs out of budget, to be called again. (`server/scripts/apply-retention.ts`
-does the same from a machine that has Application Default Credentials.)
+`after` cursor when it runs out of budget, to be called again.
 
 Hourly buckets are the ramp between the two: raw for a few days, hourly for the retention window,
 daily beyond. The phone computes them with the same `HKStatisticsCollectionQuery` as the daily

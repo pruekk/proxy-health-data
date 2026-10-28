@@ -8,7 +8,9 @@ struct SettingsTabView: View {
     @State private var confirmReset = false
     @State private var confirmDelete = false
     @State private var confirmRevoke = false
-    @State private var pendingRetention: Int?
+    @State private var editingGroup: RetentionGroup?
+    /// The change waiting on confirmation, because shrinking a window deletes for good.
+    @State private var pendingChange: (group: RetentionGroup, value: Int)?
     @State private var retentionProgress: RetentionProgress?
     @State private var busy: String?
 
@@ -45,20 +47,33 @@ struct SettingsTabView: View {
         } message: {
             Text("Claude จะหลุดทันทีและต้องเข้าสู่ระบบใหม่ โทเคนของแอปนี้ยังใช้ได้ตามเดิม")
         }
-        // 6: shrinking the window deletes data for good, so it asks first and then re-stamps
-        // what is already stored — otherwise the setting would only affect future writes.
-        .alert("เปลี่ยนการเก็บข้อมูลเป็น \(pendingRetention ?? 0) ปี?", isPresented: .init(
-            get: { pendingRetention != nil },
-            set: { if !$0 { pendingRetention = nil } }
+        // Shrinking a window deletes for good, so it asks first and then re-stamps what is
+        // already stored — otherwise the setting would only affect future writes.
+        .alert(pendingChange.map { "เก็บ\($0.group.name) \($0.group.label($0.value))?" } ?? "", isPresented: .init(
+            get: { pendingChange != nil },
+            set: { if !$0 { pendingChange = nil } }
         )) {
-            Button("ยกเลิก", role: .cancel) { pendingRetention = nil }
-            Button(shrinking ? "ลดเหลือ \(pendingRetention ?? 0) ปี" : "เปลี่ยน", role: shrinking ? .destructive : nil) {
-                if let years = pendingRetention { Task { await applyRetention(years) } }
+            Button("ยกเลิก", role: .cancel) { pendingChange = nil }
+            Button(shrinking ? "ลดลง" : "เปลี่ยน", role: shrinking ? .destructive : nil) {
+                if let change = pendingChange { Task { await applyRetention(change.group, change.value) } }
             }
         } message: {
             Text(shrinking
-                 ? "ข้อมูลที่เก่ากว่า \(pendingRetention ?? 0) ปีจะถูกลบภายใน 24 ชั่วโมง และกู้คืนไม่ได้\n\nจะมีผลกับข้อมูลเดิมที่เก็บไว้แล้วด้วย ไม่ใช่เฉพาะข้อมูลใหม่"
-                 : "ข้อมูลเดิมที่เก็บไว้แล้วจะถูกยืดอายุตามไปด้วย")
+                 ? "ข้อมูลในกลุ่มนี้ที่เก่ากว่านั้นจะถูกลบภายใน 24 ชั่วโมง\n\nต้นฉบับยังอยู่ที่ Apple Health — กดซิงก์ใหม่ทั้งหมดเพื่อดึงกลับได้ เท่าที่ Health ยังเก็บไว้"
+                 : "ข้อมูลเดิมในกลุ่มนี้จะถูกยืดอายุตามไปด้วย ไม่ใช่เฉพาะข้อมูลใหม่")
+        }
+        .sheet(item: $editingGroup) { group in
+            RetentionGroupSheet(
+                group: group,
+                current: dashboard.retention[group.id] ?? group.default,
+                metrics: dashboard.storedMetrics(in: group.id),
+                onPick: { value in
+                    editingGroup = nil
+                    if value != (dashboard.retention[group.id] ?? group.default) {
+                        pendingChange = (group, value)
+                    }
+                }
+            )
         }
         .alert("ลบข้อมูลทั้งหมด?", isPresented: $confirmDelete) {
             Button("ยกเลิก", role: .cancel) {}
@@ -100,34 +115,65 @@ struct SettingsTabView: View {
         }
     }
 
+    /// Five rows rather than one window for everything: the groups behave differently enough
+    /// that a single number forces a choice between losing the multi-year lines and paying for
+    /// the high-frequency noise. Tapping a row opens the window picker for that group.
     private var retention: some View {
         VStack(spacing: 0) {
-            SectionTitle(text: "ข้อมูล")
-            Card {
-                Text("เก็บข้อมูลย้อนหลัง").font(.system(size: 10.5, weight: .bold)).kerning(0.9).foregroundStyle(.secondary)
-                Picker("", selection: Binding(
-                    get: { dashboard.retentionYears },
-                    set: { years in if years != dashboard.retentionYears { pendingRetention = years } }
-                )) {
-                    ForEach(AppConfig.display.retentionOptions, id: \.self) { years in
-                        Text("\(years) ปี").tag(years)
+            SectionTitle(text: "ข้อมูล", hint: dashboard.totalDocuments.map { "\($0.formatted(0)) เอกสาร" })
+            Card(vertical: 3) {
+                VStack(spacing: 0) {
+                    let groups = dashboard.retentionGroups
+                    ForEach(groups) { group in
+                        Button { editingGroup = group } label: { groupRow(group) }
+                            .buttonStyle(.plain)
+                        if group.id != groups.last?.id { Divider() }
+                    }
+                    if groups.isEmpty {
+                        Text("กำลังโหลดการตั้งค่า…").font(.system(size: 13)).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 10)
                     }
                 }
-                .pickerStyle(.segmented)
-                .padding(.top, 10)
-                Text("ข้อมูลที่เก่ากว่านี้จะถูกลบออกอัตโนมัติ ส่วนค่าที่บันทึกถี่มาก (ชีพจร ความเร็ว) เก็บ raw ไว้ 7 วัน ยกเว้นช่วงที่ออกกำลังกาย — สรุปรายชั่วโมงและรายวันยังอยู่ครบตามช่วงที่เลือก")
-                    .font(.system(size: 12.5)).foregroundStyle(.secondary).padding(.top, 10)
+                Text("ที่นี่เป็นสำเนาเพื่อให้ AI อ่านได้ ต้นฉบับอยู่ที่ Apple Health เสมอ — ลบแล้วกดซิงก์ใหม่ก็ได้คืน")
+                    .font(.system(size: 11.5)).foregroundStyle(.tertiary)
+                    .padding(.top, 10).padding(.horizontal, 2)
 
                 if let progress = retentionProgress {
                     VStack(alignment: .leading, spacing: 7) {
-                        ProgressView(value: progress.fraction)
-                            .tint(Brand.blue)
-                        Text(progress.label)
-                            .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                        ProgressView(value: progress.fraction).tint(Brand.blue)
+                        Text(progress.label).font(.system(size: 11.5)).foregroundStyle(.secondary)
                     }
                     .padding(.top, 12)
                 }
             }
+        }
+    }
+
+    private func groupRow(_ group: RetentionGroup) -> some View {
+        let count = dashboard.documentCount(in: group.id)
+        let window = dashboard.retention[group.id] ?? group.default
+        return HStack(spacing: 10) {
+            Circle().fill(color(for: group.id)).frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(group.name).font(.system(size: 13.5, weight: .medium))
+                Text(count > 0 ? "\(group.summary) · \(count.formatted(0))" : group.summary)
+                    .font(.system(size: 11.5)).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Text(group.label(window)).font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
+            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 11)
+        .contentShape(Rectangle())
+    }
+
+    private func color(for group: String) -> Color {
+        switch group {
+        case "raw": .red
+        case "recovery": Brand.blue
+        case "training": .orange
+        case "body": Brand.exercise
+        default: .purple
         }
     }
 
@@ -237,18 +283,26 @@ struct SettingsTabView: View {
 
     // MARK: Actions
 
-    private var shrinking: Bool { (pendingRetention ?? 0) < dashboard.retentionYears }
+    private var shrinking: Bool {
+        guard let change = pendingChange else { return false }
+        return change.value < (dashboard.retention[change.group.id] ?? change.group.default)
+    }
 
     /// Saves the new window and re-stamps what is already stored. The work is per scope, so the
     /// progress is a real count rather than a spinner that cannot say how far along it is.
-    private func applyRetention(_ years: Int) async {
+    private func applyRetention(_ group: RetentionGroup, _ value: Int) async {
         guard let client = APIClient(settings: model.settings) else { return }
-        pendingRetention = nil
+        pendingChange = nil
         do {
-            try await client.put("v1/settings", body: ["retentionYears": years])
-            model.appendLog("เปลี่ยนการเก็บข้อมูลเป็น \(years) ปี")
+            try await client.put("v1/settings", body: ["retention": [group.id: value]])
+            model.appendLog("เก็บ\(group.name) \(group.label(value))")
 
-            let scopes = dashboard.metrics.keys.sorted() + ["daily", "hourly", "workouts"]
+            // Only the scopes this group owns, plus the shared aggregates when the group they
+            // follow changed. Re-stamping every metric for a change to one of them was most of
+            // the wait and none of the work.
+            let keys = AppConfig.metricKeys(in: group.id)
+            let scopes = dashboard.metrics.keys.filter { keys.contains($0) }.sorted()
+                + (group.id == "training" ? ["daily", "hourly", "workouts"] : [])
             var stamped = 0
             for (index, scope) in scopes.enumerated() {
                 retentionProgress = RetentionProgress(done: index, total: scopes.count, stamped: stamped, scope: scope)

@@ -18,12 +18,15 @@ struct RemoteCatalog: Codable, Sendable {
         var retention: String?
         var hourly: Bool?
         var raw: Bool?
+        /// Which retention group the metric belongs to.
+        var group: String?
     }
 
     struct Category: Codable, Sendable {
         let key: String
         let identifier: String
         var backfill: String?
+        var group: String?
     }
 
     /// Which rows appear on screen and what they are called. Server-side so a new metric shows
@@ -187,6 +190,14 @@ enum AppConfig {
     static var recentWorkouts: Int { sync.recentWorkouts ?? 5 }
     static var sleepTargetMinutes: Int { CatalogStore.cached?.battery?.sleepTargetMinutes ?? 480 }
     static var shortRetentionDays: Int { sync.shortRetentionDays ?? 7 }
+
+    /// Metric keys belonging to a retention group, from the catalog.
+    static func metricKeys(in group: String) -> Set<String> {
+        guard let catalog = CatalogStore.cached else { return [] }
+        let quantities = catalog.quantities.filter { ($0.group ?? "training") == group }.map(\.key)
+        let categories = catalog.categories.filter { ($0.group ?? "training") == group }.map(\.key)
+        return Set(quantities + categories)
+    }
 
     /// Metrics whose raw samples only live for a few days. Taken from the catalog so the
     /// coverage list stays true after a retention change on the server.

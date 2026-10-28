@@ -1,6 +1,7 @@
 import { Elysia, t } from 'elysia'
 import { auth } from './auth'
 import { catalog } from './catalog'
+import { defaults as retentionDefaults, validate as validateRetention } from './retention'
 import { computeBattery } from './battery'
 import { parseDateKeys, parseRange } from './dates'
 import { env } from './env'
@@ -9,13 +10,12 @@ import { listUserConnectors, oauth, revokeUserTokens } from './oauth'
 import { SyncBody, SyncLogInput } from './schemas'
 import {
   BadRequest,
-  DEFAULT_RETENTION_YEARS,
   applyRetention,
   collectBatteryInputs,
   deleteAllData,
   getProfile,
   getReadiness,
-  getRetentionYears,
+  getRetention,
   ingest,
   listMetrics,
   listSyncs,
@@ -25,7 +25,7 @@ import {
   querySleep,
   queryWorkouts,
   recordSync,
-  setRetentionYears,
+  setRetention,
 } from './store'
 
 const RangeQuery = t.Object({
@@ -136,17 +136,25 @@ export const app = new Elysia()
       )
 
       // ----- settings and housekeeping -----
+      // Retention is per group; the groups themselves, their windows and the wording the app
+      // shows come from the catalog, so adding one is a deploy rather than a rebuild.
       .get('/settings', async ({ uid }) => ({
-        retentionYears: await getRetentionYears(uid),
-        defaultRetentionYears: DEFAULT_RETENTION_YEARS,
+        retention: await getRetention(uid),
+        groups: catalog.retentionGroups,
+        defaults: retentionDefaults,
       }))
       .put(
         '/settings',
-        async ({ uid, body }) => {
-          await setRetentionYears(uid, body.retentionYears)
-          return { ok: true, retentionYears: body.retentionYears }
+        async ({ uid, body, set }) => {
+          try {
+            const changes = validateRetention((body.retention ?? {}) as Record<string, unknown>)
+            return { ok: true, retention: await setRetention(uid, changes) }
+          } catch (error) {
+            set.status = 400
+            return { error: error instanceof Error ? error.message : 'invalid retention' }
+          }
         },
-        { body: t.Object({ retentionYears: t.Integer({ minimum: 1, maximum: 50 }) }) },
+        { body: t.Object({ retention: t.Optional(t.Record(t.String(), t.Integer())) }) },
       )
       // One-off housekeeping: stamps `expiresAt` on documents written before retention existed.
       // One scope per call (a metric type, or daily/hourly/workouts) to stay inside the timeout.

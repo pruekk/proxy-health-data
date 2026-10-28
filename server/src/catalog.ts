@@ -34,6 +34,8 @@ interface QuantityMetric {
    * They are synced as hourly and daily aggregates instead, already de-duplicated on the phone.
    */
   raw?: boolean
+  /** Which retention group this belongs to; see `groups` below. */
+  group?: GroupId
 }
 
 interface CategoryMetric {
@@ -41,7 +43,67 @@ interface CategoryMetric {
   identifier: string
   backfill?: Backfill
   retention?: Retention
+  group?: GroupId
 }
+
+/**
+ * Retention groups. Metrics are kept for different lengths because they behave differently:
+ * raw heart rate arrives hundreds of times a day and is summarised hourly anyway, while a
+ * weigh-in arrives monthly and is only worth anything as a multi-year line.
+ *
+ * Nothing is kept forever. This service is a copy — Apple Health holds the original — so every
+ * group expires and a full re-sync brings back whatever Health still has.
+ */
+export type GroupId = 'raw' | 'recovery' | 'training' | 'body' | 'events'
+
+const groups = [
+  {
+    id: 'raw' as const,
+    name: 'ข้อมูลดิบความถี่สูง',
+    summary: 'ชีพจร ความเร็ว',
+    /** Windows in days: this group is measured in days, not years. */
+    unit: 'days' as const,
+    options: [7, 14, 30, 90],
+    default: 7,
+    note: 'ช่วงที่ออกกำลังกายไม่ถูกลบตามหน้าต่างนี้ แต่เก็บตามกลุ่มการซ้อม — หน้าต่างนี้คุมเฉพาะชีพจรระหว่างวันธรรมดา ซึ่งสรุปรายชั่วโมงเก็บแทนไว้แล้ว',
+  },
+  {
+    id: 'recovery' as const,
+    name: 'ฟื้นตัวและการนอน',
+    summary: 'นอน HRV ชีพจรพัก',
+    unit: 'years' as const,
+    options: [1, 2, 5, 10],
+    default: 5,
+    note: 'เป็นฐานของคะแนนความพร้อมและค่าปกติทั้งหมด ยิ่งยาวยิ่งเทียบตัวเองได้แม่น และโตช้ามากเมื่อเทียบกับข้อมูลดิบ',
+  },
+  {
+    id: 'training' as const,
+    name: 'การซ้อมและกิจกรรม',
+    summary: 'สรุปรายวัน · workout',
+    unit: 'years' as const,
+    options: [1, 2, 5, 10],
+    default: 5,
+    note: 'สรุปรายวันและรายชั่วโมงทั้งหมดอยู่ในกลุ่มนี้ รวมถึงชีพจรและความเร็วช่วงที่ออกกำลังกาย',
+  },
+  {
+    id: 'body' as const,
+    name: 'ร่างกายและความฟิต',
+    summary: 'น้ำหนัก ไขมัน VO₂max',
+    unit: 'years' as const,
+    options: [1, 2, 5, 10],
+    default: 10,
+    note: 'ทั้งกลุ่มเล็กกว่าชีพจรวันเดียว · ชั่งเดือนละครั้งต้องเก็บหลายปีถึงจะเห็นแนวโน้ม',
+  },
+  {
+    id: 'events' as const,
+    name: 'เหตุการณ์และอื่น ๆ',
+    summary: 'ชีพจรผิดปกติ การฝึกสติ',
+    unit: 'years' as const,
+    options: [1, 2, 5, 10],
+    default: 10,
+    note: 'นาน ๆ เกิดที แต่เป็นเรื่องที่อยากย้อนดูได้',
+  },
+]
 
 const q = (
   key: string,
@@ -53,57 +115,57 @@ const q = (
 
 const quantities: QuantityMetric[] = [
   // Activity
-  q('stepCount', 'HKQuantityTypeIdentifierStepCount', 'count', 'cumulative', { raw: false, retention: 'short', hourly: true }),
-  q('distanceWalkingRunning', 'HKQuantityTypeIdentifierDistanceWalkingRunning', 'm', 'cumulative', { raw: false, retention: 'short', hourly: true }),
-  q('distanceCycling', 'HKQuantityTypeIdentifierDistanceCycling', 'm', 'cumulative', { raw: false, retention: 'short', hourly: true }),
-  q('distanceSwimming', 'HKQuantityTypeIdentifierDistanceSwimming', 'm', 'cumulative', { raw: false, retention: 'short', hourly: true }),
-  q('flightsClimbed', 'HKQuantityTypeIdentifierFlightsClimbed', 'count', 'cumulative', { raw: false, retention: 'short', hourly: true }),
-  q('activeEnergyBurned', 'HKQuantityTypeIdentifierActiveEnergyBurned', 'kcal', 'cumulative', { raw: false, retention: 'short', hourly: true }),
-  q('basalEnergyBurned', 'HKQuantityTypeIdentifierBasalEnergyBurned', 'kcal', 'cumulative', { raw: false, retention: 'short', hourly: true }),
-  q('appleExerciseTime', 'HKQuantityTypeIdentifierAppleExerciseTime', 'min', 'cumulative', { raw: false, retention: 'short', hourly: true }),
-  q('appleStandTime', 'HKQuantityTypeIdentifierAppleStandTime', 'min', 'cumulative', { raw: false, retention: 'short', hourly: true }),
-  q('appleMoveTime', 'HKQuantityTypeIdentifierAppleMoveTime', 'min', 'cumulative', { raw: false, retention: 'short', hourly: true }),
-  q('timeInDaylight', 'HKQuantityTypeIdentifierTimeInDaylight', 'min', 'cumulative', { raw: false, retention: 'short', hourly: true }),
+  q('stepCount', 'HKQuantityTypeIdentifierStepCount', 'count', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
+  q('distanceWalkingRunning', 'HKQuantityTypeIdentifierDistanceWalkingRunning', 'm', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
+  q('distanceCycling', 'HKQuantityTypeIdentifierDistanceCycling', 'm', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
+  q('distanceSwimming', 'HKQuantityTypeIdentifierDistanceSwimming', 'm', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
+  q('flightsClimbed', 'HKQuantityTypeIdentifierFlightsClimbed', 'count', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
+  q('activeEnergyBurned', 'HKQuantityTypeIdentifierActiveEnergyBurned', 'kcal', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
+  q('basalEnergyBurned', 'HKQuantityTypeIdentifierBasalEnergyBurned', 'kcal', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
+  q('appleExerciseTime', 'HKQuantityTypeIdentifierAppleExerciseTime', 'min', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
+  q('appleStandTime', 'HKQuantityTypeIdentifierAppleStandTime', 'min', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
+  q('appleMoveTime', 'HKQuantityTypeIdentifierAppleMoveTime', 'min', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
+  q('timeInDaylight', 'HKQuantityTypeIdentifierTimeInDaylight', 'min', 'cumulative', { group: 'training', raw: false, retention: 'short', hourly: true }),
   // Heart and lungs
-  q('heartRate', 'HKQuantityTypeIdentifierHeartRate', 'count/min', 'discrete', { retention: 'short', hourly: true }),
-  q('restingHeartRate', 'HKQuantityTypeIdentifierRestingHeartRate', 'count/min', 'discrete', { backfill: 'extended' }),
-  q('walkingHeartRateAverage', 'HKQuantityTypeIdentifierWalkingHeartRateAverage', 'count/min', 'discrete', { backfill: 'extended' }),
-  q('heartRateVariabilitySDNN', 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN', 'ms', 'discrete', { backfill: 'extended' }),
-  q('heartRateRecoveryOneMinute', 'HKQuantityTypeIdentifierHeartRateRecoveryOneMinute', 'count/min', 'discrete', { backfill: 'all' }),
-  q('oxygenSaturation', 'HKQuantityTypeIdentifierOxygenSaturation', '%', 'discrete'),
-  q('respiratoryRate', 'HKQuantityTypeIdentifierRespiratoryRate', 'count/min', 'discrete'),
-  q('vo2Max', 'HKQuantityTypeIdentifierVO2Max', 'ml/(kg*min)', 'discrete', { backfill: 'all' }),
-  q('bloodPressureSystolic', 'HKQuantityTypeIdentifierBloodPressureSystolic', 'mmHg', 'discrete', { backfill: 'extended' }),
-  q('bloodPressureDiastolic', 'HKQuantityTypeIdentifierBloodPressureDiastolic', 'mmHg', 'discrete', { backfill: 'extended' }),
+  q('heartRate', 'HKQuantityTypeIdentifierHeartRate', 'count/min', 'discrete', { group: 'raw', retention: 'short', hourly: true }),
+  q('restingHeartRate', 'HKQuantityTypeIdentifierRestingHeartRate', 'count/min', 'discrete', { group: 'recovery', backfill: 'extended' }),
+  q('walkingHeartRateAverage', 'HKQuantityTypeIdentifierWalkingHeartRateAverage', 'count/min', 'discrete', { group: 'recovery', backfill: 'extended' }),
+  q('heartRateVariabilitySDNN', 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN', 'ms', 'discrete', { group: 'recovery', backfill: 'extended' }),
+  q('heartRateRecoveryOneMinute', 'HKQuantityTypeIdentifierHeartRateRecoveryOneMinute', 'count/min', 'discrete', { group: 'recovery', backfill: 'all' }),
+  q('oxygenSaturation', 'HKQuantityTypeIdentifierOxygenSaturation', '%', 'discrete', { group: 'recovery' }),
+  q('respiratoryRate', 'HKQuantityTypeIdentifierRespiratoryRate', 'count/min', 'discrete', { group: 'recovery' }),
+  q('vo2Max', 'HKQuantityTypeIdentifierVO2Max', 'ml/(kg*min)', 'discrete', { group: 'body', backfill: 'all' }),
+  q('bloodPressureSystolic', 'HKQuantityTypeIdentifierBloodPressureSystolic', 'mmHg', 'discrete', { group: 'body', backfill: 'extended' }),
+  q('bloodPressureDiastolic', 'HKQuantityTypeIdentifierBloodPressureDiastolic', 'mmHg', 'discrete', { group: 'body', backfill: 'extended' }),
   // Body
-  q('bodyMass', 'HKQuantityTypeIdentifierBodyMass', 'kg', 'discrete', { backfill: 'all' }),
-  q('height', 'HKQuantityTypeIdentifierHeight', 'm', 'discrete', { backfill: 'all' }),
-  q('bodyFatPercentage', 'HKQuantityTypeIdentifierBodyFatPercentage', '%', 'discrete', { backfill: 'all' }),
-  q('leanBodyMass', 'HKQuantityTypeIdentifierLeanBodyMass', 'kg', 'discrete', { backfill: 'all' }),
-  q('bodyMassIndex', 'HKQuantityTypeIdentifierBodyMassIndex', 'count', 'discrete', { backfill: 'all' }),
-  q('waistCircumference', 'HKQuantityTypeIdentifierWaistCircumference', 'cm', 'discrete', { backfill: 'all' }),
-  q('bodyTemperature', 'HKQuantityTypeIdentifierBodyTemperature', 'degC', 'discrete', { backfill: 'all' }),
-  q('appleSleepingWristTemperature', 'HKQuantityTypeIdentifierAppleSleepingWristTemperature', 'degC', 'discrete', { backfill: 'extended' }),
+  q('bodyMass', 'HKQuantityTypeIdentifierBodyMass', 'kg', 'discrete', { group: 'body', backfill: 'all' }),
+  q('height', 'HKQuantityTypeIdentifierHeight', 'm', 'discrete', { group: 'body', backfill: 'all' }),
+  q('bodyFatPercentage', 'HKQuantityTypeIdentifierBodyFatPercentage', '%', 'discrete', { group: 'body', backfill: 'all' }),
+  q('leanBodyMass', 'HKQuantityTypeIdentifierLeanBodyMass', 'kg', 'discrete', { group: 'body', backfill: 'all' }),
+  q('bodyMassIndex', 'HKQuantityTypeIdentifierBodyMassIndex', 'count', 'discrete', { group: 'body', backfill: 'all' }),
+  q('waistCircumference', 'HKQuantityTypeIdentifierWaistCircumference', 'cm', 'discrete', { group: 'body', backfill: 'all' }),
+  q('bodyTemperature', 'HKQuantityTypeIdentifierBodyTemperature', 'degC', 'discrete', { group: 'recovery', backfill: 'all' }),
+  q('appleSleepingWristTemperature', 'HKQuantityTypeIdentifierAppleSleepingWristTemperature', 'degC', 'discrete', { group: 'recovery', backfill: 'extended' }),
   // Mobility and running form
-  q('walkingSpeed', 'HKQuantityTypeIdentifierWalkingSpeed', 'm/s', 'discrete', { retention: 'short' }),
-  q('walkingStepLength', 'HKQuantityTypeIdentifierWalkingStepLength', 'm', 'discrete', { retention: 'short' }),
-  q('runningSpeed', 'HKQuantityTypeIdentifierRunningSpeed', 'm/s', 'discrete', { retention: 'short' }),
-  q('runningPower', 'HKQuantityTypeIdentifierRunningPower', 'W', 'discrete', { retention: 'short' }),
-  q('runningStrideLength', 'HKQuantityTypeIdentifierRunningStrideLength', 'm', 'discrete', { retention: 'short' }),
-  q('runningGroundContactTime', 'HKQuantityTypeIdentifierRunningGroundContactTime', 'ms', 'discrete', { retention: 'short' }),
-  q('runningVerticalOscillation', 'HKQuantityTypeIdentifierRunningVerticalOscillation', 'cm', 'discrete', { retention: 'short' }),
+  q('walkingSpeed', 'HKQuantityTypeIdentifierWalkingSpeed', 'm/s', 'discrete', { group: 'raw', retention: 'short' }),
+  q('walkingStepLength', 'HKQuantityTypeIdentifierWalkingStepLength', 'm', 'discrete', { group: 'raw', retention: 'short' }),
+  q('runningSpeed', 'HKQuantityTypeIdentifierRunningSpeed', 'm/s', 'discrete', { group: 'raw', retention: 'short' }),
+  q('runningPower', 'HKQuantityTypeIdentifierRunningPower', 'W', 'discrete', { group: 'raw', retention: 'short' }),
+  q('runningStrideLength', 'HKQuantityTypeIdentifierRunningStrideLength', 'm', 'discrete', { group: 'raw', retention: 'short' }),
+  q('runningGroundContactTime', 'HKQuantityTypeIdentifierRunningGroundContactTime', 'ms', 'discrete', { group: 'raw', retention: 'short' }),
+  q('runningVerticalOscillation', 'HKQuantityTypeIdentifierRunningVerticalOscillation', 'cm', 'discrete', { group: 'raw', retention: 'short' }),
 ]
 
 const categories: CategoryMetric[] = [
   // Without an explicit window this fell back to the seven-day default, so a reinstall or a
   // first sync saw a week of nights while heart rate and HRV came back two years — which left
   // the coaching tools with no sleep baseline to compare a night against.
-  { key: 'sleepAnalysis', identifier: 'HKCategoryTypeIdentifierSleepAnalysis', backfill: 'extended' },
-  { key: 'mindfulSession', identifier: 'HKCategoryTypeIdentifierMindfulSession', backfill: 'extended' },
-  { key: 'highHeartRateEvent', identifier: 'HKCategoryTypeIdentifierHighHeartRateEvent', backfill: 'extended' },
-  { key: 'lowHeartRateEvent', identifier: 'HKCategoryTypeIdentifierLowHeartRateEvent', backfill: 'extended' },
-  { key: 'irregularHeartRhythmEvent', identifier: 'HKCategoryTypeIdentifierIrregularHeartRhythmEvent', backfill: 'extended' },
-  { key: 'lowCardioFitnessEvent', identifier: 'HKCategoryTypeIdentifierLowCardioFitnessEvent', backfill: 'extended' },
+  { key: 'sleepAnalysis', identifier: 'HKCategoryTypeIdentifierSleepAnalysis', backfill: 'extended', group: 'recovery' },
+  { key: 'mindfulSession', identifier: 'HKCategoryTypeIdentifierMindfulSession', backfill: 'extended', group: 'events' },
+  { key: 'highHeartRateEvent', identifier: 'HKCategoryTypeIdentifierHighHeartRateEvent', backfill: 'extended', group: 'events' },
+  { key: 'lowHeartRateEvent', identifier: 'HKCategoryTypeIdentifierLowHeartRateEvent', backfill: 'extended', group: 'events' },
+  { key: 'irregularHeartRhythmEvent', identifier: 'HKCategoryTypeIdentifierIrregularHeartRhythmEvent', backfill: 'extended', group: 'events' },
+  { key: 'lowCardioFitnessEvent', identifier: 'HKCategoryTypeIdentifierLowCardioFitnessEvent', backfill: 'extended', group: 'events' },
 ]
 
 /**
@@ -216,6 +278,7 @@ const body = {
   characteristics: ['HKCharacteristicTypeIdentifierDateOfBirth', 'HKCharacteristicTypeIdentifierBiologicalSex'],
   display,
   battery,
+  retentionGroups: groups,
   load,
   heartRate,
   sync: {

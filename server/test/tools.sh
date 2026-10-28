@@ -142,9 +142,18 @@ check "hourly tool returns buckets" "1500" "$(call get_hourly_pattern '{}' | pyt
 check "hourly keeps 24 slots per metric" "2" "$(call get_hourly_pattern '{}' | python3 -c 'import sys,json;d=json.load(sys.stdin)["days"];print(len(d[-1]["metrics"]["stepCount"]))')"
 
 echo "12. settings, history and delete"
-check "default retention" "1" "$(curl -s $B/v1/settings -H "$AUTH" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["retentionYears"] in (1,2) else 0)')"
-check "retention can be set" "5" "$(curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retentionYears":5}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["retentionYears"])')"
-check "retention rejects nonsense" "422" "$(curl -s -o /dev/null -w '%{http_code}' -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retentionYears":999}')"
+check "every group has a window" "1" "$(curl -s $B/v1/settings -H "$AUTH" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)
+print(1 if all(g["id"] in d["retention"] for g in d["groups"]) else 0)')"
+check "groups carry their own options" "1" "$(curl -s $B/v1/settings -H "$AUTH" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)
+raw = [g for g in d["groups"] if g["id"] == "raw"][0]
+print(1 if raw["unit"] == "days" and 7 in raw["options"] else 0)')"
+check "a window can be set per group" "30" "$(curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retention":{"raw":30}}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["retention"]["raw"])')"
+check "the other groups are left alone" "5" "$(curl -s $B/v1/settings -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)["retention"]["recovery"])')"
+check "a window not on offer is refused" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retention":{"raw":365}}')"
 curl -s -X POST $B/v1/syncs -H "$AUTH" -H 'content-type: application/json' -d '{"startedAt":"2026-10-24T03:00:00.000Z","durationMs":910,"trigger":"background","samples":120,"workouts":1,"days":2}' > /dev/null
 check "sync log stored" "120" "$(curl -s $B/v1/syncs -H "$AUTH" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["samples"])')"
 check "connectors listed" "0" "$(curl -s $B/v1/connectors -H "$AUTH" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)))')"
@@ -308,7 +317,7 @@ check "REST route agrees with the tool" "$LEVEL" "$(curl -s $B/v1/battery -H "$E
 echo "17. retention apply brings an expiry forward, never back"
 # Written while retention was 5 years, then the user picks 1: the sweep has to shorten what is
 # already stamped, which is the same path a metric moving to the short tier takes.
-curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retentionYears":5}' > /dev/null
+curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retention":{"body":5}}' > /dev/null
 python3 - "$B" "$TOKEN" <<'PY2'
 import json, sys, urllib.request
 from datetime import datetime, timezone
@@ -320,12 +329,12 @@ req = urllib.request.Request(base + "/v1/sync", data=json.dumps({"samples": [
     headers={"content-type": "application/json", "authorization": "Bearer " + token})
 urllib.request.urlopen(req)
 PY2
-curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retentionYears":1}' > /dev/null
+curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retention":{"body":1}}' > /dev/null
 R=$(curl -s -X POST "$B/v1/retention/apply?scope=waistCircumference&dryRun=false" -H "$AUTH")
 check "shortens the existing expiry" "1" "$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
 R=$(curl -s -X POST "$B/v1/retention/apply?scope=waistCircumference&dryRun=false" -H "$AUTH")
 check "running it again changes nothing" "0" "$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
-curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retentionYears":5}' > /dev/null
+curl -s -X PUT $B/v1/settings -H "$AUTH" -H 'content-type: application/json' -d '{"retention":{"body":5}}' > /dev/null
 R=$(curl -s -X POST "$B/v1/retention/apply?scope=waistCircumference&dryRun=false" -H "$AUTH")
 check "widening retention does not push it back" "0" "$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin)["stamped"])')"
 
