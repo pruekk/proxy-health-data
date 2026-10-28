@@ -212,3 +212,19 @@ describe('freezing the score for the day', () => {
     expect(readinessIsComplete(['sleep'])).toBe(false)
   })
 })
+
+describe('time in bed', () => {
+  const night = (sleepMinutes: number, inBedMinutes: number) =>
+    computeReadiness({ ...realDay, sleepMinutes, inBedMinutes }).factors.find((f) => f.key === 'sleep')!
+
+  test('is shown when it says something the sleep total does not', () => {
+    expect(night(304, 429).secondary).toBe('7:09')
+  })
+
+  test('is left out when the watch reports it as the same number', () => {
+    // Apple sometimes emits an inBed stage covering exactly the sleep stages, and "6:28/6:28"
+    // reads as a measurement while carrying no information.
+    expect(night(388, 388).secondary).toBeUndefined()
+    expect(night(388, 392).secondary).toBeUndefined()
+  })
+})

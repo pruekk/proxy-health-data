@@ -11,7 +11,9 @@ export interface ReadinessInputs {
   restingHeartRate?: { latest: number; baseline: number }
   /** Minutes actually asleep last night. */
   sleepMinutes?: number
-  /** Minutes in bed, which is the figure people remember; shown for context, never scored. */
+  /** Minutes in bed, which is the figure people remember; shown for context, never scored.
+   *  Only worth showing when it is meaningfully longer than the time asleep — this watch
+   *  sometimes reports the two as the same number, and "6:28/6:28" tells a reader nothing. */
   inBedMinutes?: number
   /** Exercise minutes per day: the recent average against the long-run average. */
   load?: { acute: number; chronic: number }
@@ -57,6 +59,8 @@ const WEIGHTS: Record<FactorKey, number> = {
 }
 
 const SLEEP_TARGET_MINUTES = 480
+/** Below this, time in bed and time asleep are the same story told twice. */
+const MEANINGFUL_BED_GAP_MINUTES = 10
 /** Below two factors the number would be more noise than signal. */
 const MINIMUM_FACTORS = 2
 
@@ -107,6 +111,10 @@ export function computeReadiness(inputs: ReadinessInputs) {
 
   // Sleep: straight proportion of the target, so eight hours is full marks.
   if (inputs.sleepMinutes !== undefined) {
+    const inBed =
+      inputs.inBedMinutes !== undefined && inputs.inBedMinutes - inputs.sleepMinutes >= MEANINGFUL_BED_GAP_MINUTES
+        ? inputs.inBedMinutes
+        : undefined
     const target = inputs.sleepTargetMinutes ?? SLEEP_TARGET_MINUTES
     const ratio = inputs.sleepMinutes / target
     factors.push({
@@ -119,11 +127,8 @@ export function computeReadiness(inputs: ReadinessInputs) {
       // Scored on time asleep — the recovery signal — while the remembered figure is usually
       // time in bed, so the gap is shown rather than left to look like an error.
       changePercent: round((ratio - 1) * 100, 0),
-      note:
-        inputs.inBedMinutes !== undefined
-          ? `บนเตียง ${clock(inputs.inBedMinutes)}`
-          : undefined,
-      secondary: inputs.inBedMinutes !== undefined ? clock(inputs.inBedMinutes) : undefined,
+      note: inBed !== undefined ? `บนเตียง ${clock(inBed)}` : undefined,
+      secondary: inBed !== undefined ? clock(inBed) : undefined,
       direction: ratio >= 0.9 ? 'good' : ratio >= 0.75 ? 'watch' : 'bad',
     })
   } else {
