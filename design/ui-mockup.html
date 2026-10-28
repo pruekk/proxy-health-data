@@ -215,6 +215,32 @@
 
   /* ---- loading states ---- */
   /* The loading reference is documentation, not a screen: it grows past one phone height. */
+  /* ---- body battery: segmented gauge ---- */
+  .segwrap{margin-top:14px}
+  .seg{display:flex;gap:3px;align-items:stretch;height:46px}
+  .seg i{flex:1;border-radius:2px;background:#e9e9ee}
+  .seg i.on{background:linear-gradient(180deg,#9cdc5a,#6cbf3a)}
+  .seg i.used{background:#d2d2d9}
+  .seg.warn i.on{background:linear-gradient(180deg,#f0b44f,#e09327)}
+  .seg.low i.on{background:linear-gradient(180deg,#f2766c,#e0453a)}
+  /* Markers sit at their real position on the bar, so the labels are part of the chart
+     rather than a caption that happens to mention two numbers. */
+  .segline{position:relative;height:34px;margin-top:7px;font-size:11.5px;color:var(--muted)}
+  .segline .end{position:absolute;top:13px}
+  .segline .end.l{left:0}
+  .segline .end.r{right:0}
+  .segline .mark{position:absolute;top:0;transform:translateX(-50%);text-align:center;white-space:nowrap}
+  .segline .mark em{display:block;width:1px;height:9px;margin:0 auto 3px;background:#c9c9d0;font-style:normal}
+  .segline .mark b{font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .segnow{display:flex;align-items:baseline;gap:7px;margin-top:12px}
+  .segnow .big{font-size:34px;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .segnow .unit{font-size:34px;font-weight:700;letter-spacing:-.02em;color:var(--muted);margin-left:-4px}
+  .segnow .from{margin-left:auto;font-size:12px;color:var(--muted);text-align:right;line-height:1.45}
+  .segnow .from b{color:var(--ink)}
+  .legend{display:flex;gap:14px;margin-top:11px;font-size:11px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .stamp{font-size:10.5px;color:var(--muted);font-weight:500;letter-spacing:.02em}
   .phone.tall{height:auto}
   .phone.tall .screen{height:auto;overflow:visible;padding-bottom:40px}
   .loadcard{margin:0 0 12px}
@@ -275,6 +301,7 @@
     <div class="card readiness">
       <div class="rhead">
         <span class="label">ความพร้อมซ้อม</span>
+        <span class="stamp">คิดตอนตื่น 06:55 · คงที่ทั้งวัน</span>
         <span class="info">i</span>
       </div>
       <div class="rbody">
@@ -310,20 +337,37 @@
     <div class="card battery">
       <div class="rhead">
         <span class="label">พลังงานร่างกาย</span>
+        <span class="stamp">อัปเดตทุกชั่วโมง</span>
         <span class="info">i</span>
       </div>
-      <div class="batwrap">
-        <div class="bat">
-          <div class="batfill" style="width:68%"></div>
-          <span class="batpct">68<small>%</small></span>
+
+      <div class="segnow">
+        <span class="big">42</span><span class="unit">%</span>
+        <span class="from">ตื่นมามี <b>70%</b><br>ใช้ไปแล้ว <b>28%</b></span>
+      </div>
+
+      <div class="segwrap">
+        <div class="seg warn">
+          <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+          <i class="on"></i><i class="on"></i><i class="on"></i>
+          <i class="used"></i><i class="used"></i><i class="used"></i><i class="used"></i><i class="used"></i>
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
         </div>
-        <div class="batcap"></div>
+        <div class="segline">
+          <span class="end l">0</span>
+          <span class="mark" style="left:42%"><em></em>ตอนนี้ <b>42%</b></span>
+          <span class="mark" style="left:70%"><em></em>ตื่นมา <b>70%</b></span>
+          <span class="end r">100</span>
+        </div>
       </div>
-      <div class="batstats">
-        <div class="bs charge"><b>+70%</b><span>ชาร์จเมื่อคืน</span></div>
-        <div class="bs drain"><b>−38%</b><span>ใช้ไปวันนี้</span></div>
+
+      <div class="legend">
+        <span><i style="background:linear-gradient(180deg,#f0b44f,#e09327)"></i> เหลืออยู่</span>
+        <span><i style="background:#d2d2d9"></i> ใช้ไปวันนี้</span>
+        <span><i style="background:#e9e9ee"></i> เกินจากที่ชาร์จมา</span>
       </div>
-      <p class="batsay">สูงกว่าปกติของเวลานี้ 6% — ยังมีพอสำหรับซ้อมเบาช่วงเย็น</p>
+
+      <p class="batsay">ต่ำกว่าปกติของเวลานี้ 9% — พอสำหรับซ้อมเบา เก็บแรงไว้พรุ่งนี้</p>
     </div>
 
     <div class="card">
@@ -610,13 +654,13 @@
       <p class="fine">คิดจากปัจจัยที่มี แล้วเฉลี่ยน้ำหนักใหม่ตามสัดส่วนเดิม เช่นถ้าไม่มีการนอน อีก 3 ตัวจะถูกปรับจาก 30/25/15 เป็น 43/36/21 — ต้องมีอย่างน้อย 2 ใน 4 ไม่งั้นจะไม่แสดงคะแนน</p>
 
       <div class="label" style="margin-top:22px">พลังงานร่างกาย คำนวณยังไง</div>
-      <p class="fine">ตื่นนอนได้พลังงานจากการนอน จากนั้นลดลงตามกิจกรรมและชีพจรที่สูงกว่าค่าพัก และเพิ่มขึ้นช่วงที่ร่างกายได้พัก ยกยอดข้ามวัน ไม่รีเซ็ตทุกเช้า</p>
+      <p class="fine">ตื่นนอนมาได้พลังงานตามการนอนคืนนั้น จากนั้นลดลงตามกิจกรรมและชีพจรที่สูงกว่าค่าพัก และเพิ่มขึ้นช่วงที่ร่างกายได้พัก — เริ่มนับใหม่ทุกเช้า ไม่ยกยอดข้ามวัน</p>
       <table class="bands formula">
-        <tr><td>ชาร์จจากการนอน</td><td>หลับ 8 ชม. = +55 · หลับ 5 ชม. = +34</td></tr>
-        <tr><td>ใช้พื้นฐาน</td><td>−2 ต่อชั่วโมงที่ตื่น</td></tr>
-        <tr><td>ใช้จากกิจกรรม</td><td>แคลอรีแอคทีฟ ÷ 20 · วิ่ง 600 kcal = −30</td></tr>
-        <tr><td>ใช้จากชีพจรสูง</td><td>(ชีพจรเฉลี่ย − ชีพจรพัก − 15) ÷ 10 ต่อชั่วโมง</td></tr>
-        <tr><td>ชาร์จตอนพัก</td><td>+2 ต่อชั่วโมงที่ชีพจรใกล้ค่าพักและแทบไม่ขยับ</td></tr>
+        <tr><td>ตื่นมาได้เท่าไร</td><td>20 + 60 × (ชั่วโมงที่หลับ ÷ 8) ปรับ ±6 ตาม HRV · นอน 8 ชม. = 80 · นอน 6:19 = 70</td></tr>
+        <tr><td>ใช้พื้นฐาน</td><td>−1 ต่อชั่วโมงที่ตื่น</td></tr>
+        <tr><td>ใช้จากกิจกรรม</td><td>แคลอรีแอคทีฟ ÷ 30 · วิ่ง 600 kcal = −20</td></tr>
+        <tr><td>ใช้จากชีพจรสูง</td><td>(ชีพจรเฉลี่ย − ชีพจรพัก − 15) ÷ 14 ต่อชั่วโมง</td></tr>
+        <tr><td>ชาร์จตอนพัก</td><td>+1.5 ต่อชั่วโมงที่ชีพจรใกล้ค่าพักและแทบไม่ขยับ</td></tr>
       </table>
       <p class="fine">Garmin ใช้ HRV แบบจังหวะต่อจังหวะตลอดวันซึ่ง Apple Watch ไม่เปิดให้เข้าถึง ของเราจึงประมาณจากชีพจรเทียบค่าพักและแคลอรีแทน ตัวเลขจะไม่ตรงกับ Body Battery ของ Garmin</p>
 
@@ -657,6 +701,80 @@
   <div class="homebar"></div>
 </div>
 <div class="caption">ยืนยันก่อนทำ — 2 แบบ</div>
+</div>
+
+
+<!-- ============ PROPOSAL : readiness frozen + battery recalibrated ============ -->
+<div class="phone-wrap">
+<div class="phone tall">
+  <div class="statusbar"><span>9:41</span>
+    <span class="icons"><span class="bars"><i></i><i></i><i></i><i></i></span>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 10.5l2-2.2a2.9 2.9 0 00-4 0l2 2.2z" fill="#1c1c1e"/><path d="M3.6 5.6a6.5 6.5 0 018.8 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/><path d="M1 3a10 10 0 0114 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span class="batt"><b></b></span></span>
+  </div>
+  <div class="screen">
+    <div class="apphead"><h2>ข้อเสนอ 2 เรื่อง</h2></div>
+
+    <div class="card loadcard">
+      <span class="label">1 · ความพร้อมซ้อม — ล็อกค่าทั้งวัน</span>
+      <p class="what" style="margin-top:10px"><b>ตอนนี้:</b> คิดใหม่ทุกครั้งที่เปิดแอป ค่าจึงขยับระหว่างวันเมื่อ HRV หรือชีพจรมีตัวเลขใหม่เข้ามา — ทั้งที่มันควรตอบคำถามว่า "เช้านี้ร่างกายพร้อมแค่ไหน"</p>
+      <table class="bands formula phases" style="margin-top:12px">
+        <tr><td>คิดเมื่อไร</td><td>ครั้งเดียวตอนตื่น (ใช้เวลาตื่นจากการนอนคืนล่าสุด)</td></tr>
+        <tr><td>เก็บที่ไหน</td><td>เอกสารของวันนั้น 1 ใบ — เปิดแอปอีกกี่ครั้งก็อ่านใบเดิม</td></tr>
+        <tr><td>AI เห็นอะไร</td><td>เลขเดียวกับในแอปเป๊ะ เพราะอ่านใบเดียวกัน</td></tr>
+        <tr><td>ข้อมูลมาช้า</td><td>ถ้าตอนตื่นยังไม่มีการนอน จะคิดใหม่จนข้อมูลครบ แล้วล็อก — ช้าสุดถึงเที่ยง</td></tr>
+        <tr><td>ค่าใช้จ่าย</td><td>อ่าน 1 เอกสาร แทนการไล่ข้อมูลย้อน 90 วันทุกครั้งที่เปิด</td></tr>
+      </table>
+      <p class="what"><b>ทำไมไม่คิดในเครื่อง:</b> คิดจาก HealthKit บนเครื่องเลยก็ประหยัดจริง แต่ AI อ่าน HealthKit ไม่ได้ ถ้าต่างฝ่ายต่างคิดก็จะได้คนละเลข — คิดบนเซิร์ฟเวอร์ครั้งเดียวแล้วแอป<b>จำไว้ทั้งวัน</b> ได้ทั้งความประหยัดและความตรงกัน</p>
+      <p class="what">บนการ์ดจะมีบรรทัดเล็ก ๆ กำกับว่า <b>"คิดตอนตื่น 06:55 · คงที่ทั้งวัน"</b> จะได้รู้ว่าเลขนี้ไม่ขยับไปเอง</p>
+    </div>
+
+    <div class="card loadcard">
+      <span class="label">2 · พลังงานร่างกาย — ลดความเฟ้อ</span>
+      <p class="what" style="margin-top:10px"><b>ตอนนี้:</b> นอน 6:19 แล้วตื่นมาได้ 95% ซึ่งสูงเกินจริง เพราะยกยอดจากเมื่อวานมาบวกกับที่ชาร์จจากการนอนอีก</p>
+      <table class="bands formula phases" style="margin-top:12px">
+        <tr><td>ตื่นมาได้เท่าไร</td><td><b>20 + 60 × (ชั่วโมงที่หลับ ÷ 8)</b> แล้วปรับ ±6 ตาม HRV เทียบค่าฐาน<br>นอน 6:19 → 67 ปรับ +3 = <b>70%</b> · นอน 8:00 → 80% · นอน 4:30 → 54%</td></tr>
+        <tr><td>ใช้พื้นฐาน</td><td>−1 ต่อชั่วโมงที่ตื่น <span style="color:#d0352b">(เดิม −2)</span></td></tr>
+        <tr><td>ใช้จากกิจกรรม</td><td>แคลอรีแอคทีฟ ÷ 30 <span style="color:#d0352b">(เดิม ÷ 20)</span></td></tr>
+        <tr><td>ใช้จากชีพจรสูง</td><td>(ชีพจร − ชีพจรพัก − 15) ÷ 14 ต่อชั่วโมง <span style="color:#d0352b">(เดิม ÷ 10)</span></td></tr>
+        <tr><td>ชาร์จตอนพัก</td><td>+1.5 ต่อชั่วโมงที่ได้พักจริง <span style="color:#d0352b">(เดิม +2)</span></td></tr>
+      </table>
+      <p class="what"><b>ผลที่ควรได้:</b> วันทำงานปกติ (ตื่น 16 ชม. แอคทีฟ ~400 kcal) ใช้ไป ~29 → ตื่น 70% เหลือ <b>41%</b> ตอนเข้านอน · วันวิ่ง 12 กม. (~850 kcal + ชีพจรสูง 2 ชม.) ใช้ไป ~45 → เหลือ <b>25%</b> · ไม่ยกยอดข้ามวันแล้ว เช้าใหม่เริ่มจากการนอนล้วน ๆ</p>
+      <p class="what">ตัวเลขทั้งหมดเป็นค่าใน catalog ฝั่งเซิร์ฟเวอร์ ปรับจูนได้ด้วยการ deploy ไม่ต้อง build แอปใหม่</p>
+    </div>
+
+    <div class="card loadcard">
+      <span class="label">3 · หน้าตาใหม่ของแถบพลังงาน</span>
+      <div class="segnow">
+        <span class="big">42</span><span class="unit">%</span>
+        <span class="from">ตื่นมามี <b>70%</b><br>ใช้ไปแล้ว <b>28%</b></span>
+      </div>
+      <div class="segwrap">
+        <div class="seg warn">
+          <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+          <i class="on"></i><i class="on"></i><i class="on"></i>
+          <i class="used"></i><i class="used"></i><i class="used"></i><i class="used"></i><i class="used"></i>
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <div class="segline">
+          <span class="end l">0</span>
+          <span class="mark" style="left:42%"><em></em>ตอนนี้ <b>42%</b></span>
+          <span class="mark" style="left:70%"><em></em>ตื่นมา <b>70%</b></span>
+          <span class="end r">100</span>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i style="background:linear-gradient(180deg,#f0b44f,#e09327)"></i> เหลืออยู่</span>
+        <span><i style="background:#d2d2d9"></i> ใช้ไปวันนี้</span>
+        <span><i style="background:#e9e9ee"></i> เกินจากที่ชาร์จมา</span>
+      </div>
+      <p class="what">20 ช่อง ช่องละ 5% · ช่องสว่าง = ที่เหลืออยู่ · ช่องเทา = ที่ใช้ไปแล้ววันนี้ · ช่องจาง = ส่วนที่เช้านี้ไม่เคยมี (นอนไม่ถึงเป้า) เห็นทั้ง "ตื่นมามีเท่าไร" และ "ตอนนี้เหลือเท่าไร" ในแถบเดียว</p>
+      <p class="what">สีตามระดับที่เหลือ: เขียว ≥ 50% · ส้ม 20–49% · แดง &lt; 20%</p>
+    </div>
+  </div>
+  <div class="homebar"></div>
+</div>
+<div class="caption">ข้อเสนอ — รอยืนยันก่อนลงมือ</div>
 </div>
 
 <!-- ============ LOADING STATES ============ -->
