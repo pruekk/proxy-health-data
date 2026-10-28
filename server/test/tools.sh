@@ -404,6 +404,12 @@ S=$(call_est get_sleep '{"from":"2026-02-10","to":"2026-02-10"}')
 check "both halves of the night are one night" "330" "$(echo "$S" | python3 -c 'import sys,json;n=json.load(sys.stdin)["nights"];print(n[0]["asleepMinutes"] if n else 0)')"
 check "the second source does not double it" "1" "$(echo "$S" | python3 -c 'import sys,json;n=json.load(sys.stdin)["nights"];print(1 if n and n[0]["asleepMinutes"] < 400 else 0)')"
 check "the nap is kept separate" "45" "$(echo "$S" | python3 -c 'import sys,json;n=json.load(sys.stdin)["nights"];print(sum(p["asleepMinutes"] for x in n for p in x.get("naps",[])))')"
+check "the sleep window is reported" "1" "$(echo "$S" | python3 -c 'import sys,json;n=json.load(sys.stdin)["nights"];print(1 if n and n[0].get("sleepWindowMinutes") else 0)')"
+check "but time in bed is not invented" "1" "$(echo "$S" | python3 -c '
+import sys, json
+n = json.load(sys.stdin)["nights"][0]
+# No inBed stage was recorded for this fixture, so none may be reported.
+print(1 if "inBedMinutes" not in n and "inBed" not in n.get("stagesMinutes", {}) else 0)')"
 check "waking is the morning, not the nap" "06" "$(echo "$S" | python3 -c 'import sys,json;n=json.load(sys.stdin)["nights"];print(n[0]["wakeTime"][11:13] if n else "")')"
 
 echo "21. splits come back with the workout detail"

@@ -298,7 +298,7 @@ const tools: Tool[] = [
     name: 'get_sleep',
     title: 'Sleep',
     description:
-      'Nightly sleep: bedtime, wake time, total asleep minutes, time in bed, and minutes per stage (asleepCore, asleepDeep, asleepREM, awake, inBed). Nights are keyed by the local date sleep ended, and a night broken by an hour awake is reported as one night rather than two. Daytime sleep is listed separately under `naps` instead of being added to the night, which otherwise reads as a night hours longer than it was with a wake time in the evening.',
+      'Nightly sleep: bedtime, wake time (both also as the user\'s local clock), total asleep minutes, the sleep window from first to last sample, and minutes per stage (asleepCore, asleepDeep, asleepREM, awake, inBed). Nights are keyed by the local date sleep ended, and a night broken by an hour awake is reported as one night rather than two. Daytime sleep is listed separately under `naps` instead of being added to the night, which otherwise reads as a night hours longer than it was with a wake time in the evening. Time in bed is only known when the watch records an `inBed` stage, in which case it appears in stagesMinutes; `sleepWindowMinutes` is not a substitute for it.',
     inputSchema: { type: 'object', properties: { ...range } },
     run: async (uid, args) => {
       const r = parseRange(str(args.from), str(args.to), 7)
@@ -537,7 +537,7 @@ const tools: Tool[] = [
         .filter((v): v is number => typeof v === 'number')
         .sort((a, b) => a - b)
       const zones = heartRateZones({
-        observedMax: withMax[0] ? { value: Math.round(withMax[0].value), at: withMax[0].at, workouts: withMax.length } : undefined,
+        observed: withMax.map((w) => ({ value: Math.round(w.value), at: w.at })),
         restingHeartRate: restingValues.length ? Math.round(restingValues[Math.floor(restingValues.length / 2)]!) : undefined,
         age,
       })

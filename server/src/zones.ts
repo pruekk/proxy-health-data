@@ -11,10 +11,25 @@ import { catalog } from './catalog'
 const config = catalog.heartRate
 
 export interface ZoneInputs {
-  /** Highest heart rate recorded in a workout, with when it happened. */
-  observedMax?: { value: number; at?: string; workouts: number }
+  /** Highest heart rates recorded in workouts, highest first, with when each happened. */
+  observed?: { value: number; at?: string }[]
   restingHeartRate?: number
   age?: number
+}
+
+/**
+ * The highest reading that a second one stands near. Wrist sensors occasionally lock onto
+ * cadence and report a rate that was never reached; taking the single highest would then move
+ * every zone boundary. A peak the next-highest reading corroborates is a peak that happened.
+ */
+const CORROBORATION_BPM = 6
+
+export function corroboratedMax(observed: { value: number; at?: string }[]) {
+  const sorted = [...observed].sort((a, b) => b.value - a.value)
+  const [highest, second] = sorted
+  if (!highest) return undefined
+  if (!second) return highest
+  return highest.value - second.value <= CORROBORATION_BPM ? highest : second
 }
 
 /** Tanaka rather than 220 − age, which overestimates for adults under forty. */
@@ -22,8 +37,8 @@ export const estimatedMaxFor = (age: number) => Math.round(208 - 0.7 * age)
 
 export function heartRateZones(inputs: ZoneInputs) {
   const estimated = inputs.age !== undefined ? estimatedMaxFor(inputs.age) : undefined
-  const measured =
-    inputs.observedMax && inputs.observedMax.workouts >= config.minWorkoutsForMax ? inputs.observedMax : undefined
+  const observed = inputs.observed ?? []
+  const measured = observed.length >= config.minWorkoutsForMax ? corroboratedMax(observed) : undefined
 
   const max = measured?.value ?? estimated
   if (max === undefined) {
@@ -41,7 +56,7 @@ export function heartRateZones(inputs: ZoneInputs) {
     max,
     source: measured ? ('measured' as const) : ('estimated' as const),
     measuredAt: measured?.at,
-    workoutsConsidered: inputs.observedMax?.workouts ?? 0,
+    workoutsConsidered: observed.length,
     estimatedFromAge: estimated ?? null,
     restingHeartRate: resting ?? null,
     method: resting !== undefined ? ('heart rate reserve (Karvonen)' as const) : ('percent of maximum' as const),

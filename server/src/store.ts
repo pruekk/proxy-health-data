@@ -364,15 +364,10 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
     .filter((n): n is typeof n & { date: string } => typeof n.date === 'string')
     .sort((a, b) => b.date.localeCompare(a.date))[0]
   const sleepMinutes = typeof lastNight?.asleepMinutes === 'number' ? lastNight.asleepMinutes : undefined
-  // Apple only records an explicit "inBed" stage when the user has that turned on; otherwise
-  // the time between first and last sleep sample is the honest answer.
+  // Only the explicit stage counts. Falling back to the sleep window produced a figure a few
+  // minutes above time asleep and called it time in bed, which says nothing and implies a lot.
   const stages = (lastNight?.stagesMinutes ?? {}) as Record<string, number>
-  const inBedMinutes =
-    typeof stages.inBed === 'number'
-      ? stages.inBed
-      : typeof lastNight?.inBedMinutes === 'number'
-        ? lastNight.inBedMinutes
-        : undefined
+  const inBedMinutes = typeof stages.inBed === 'number' ? stages.inBed : undefined
 
   const hrvValues = sleepHrvNights.map(([, v]) => v.avg)
   const hrv = useSleepHrv
@@ -965,7 +960,7 @@ export async function querySleep(uid: string, range: Range, timeZone: string) {
     bedtime: string
     wakeTime: string
     asleepMinutes: number
-    inBedMinutes: number
+    sleepWindowMinutes: number
     stagesMinutes: Record<string, number>
     naps: { time: string; asleepMinutes: number }[]
   }
@@ -997,7 +992,9 @@ export async function querySleep(uid: string, range: Range, timeZone: string) {
       bedtime: new Date(Math.min(...best.list.map((p) => p.from))).toISOString(),
       wakeTime: new Date(Math.max(...best.list.map((p) => p.to))).toISOString(),
       asleepMinutes: Math.round(best.asleep),
-      inBedMinutes: Math.round(unionMinutes(best.list)),
+      // First sample to last, awake stretches included. This is not time in bed: Apple only
+      // knows that when the user has the inBed stage turned on, and it lands in stagesMinutes.
+      sleepWindowMinutes: Math.round(unionMinutes(best.list)),
       stagesMinutes: stages,
       naps: [],
     }
@@ -1019,7 +1016,7 @@ export async function querySleep(uid: string, range: Range, timeZone: string) {
         continue
       }
       existing.asleepMinutes += night.asleepMinutes
-      existing.inBedMinutes += night.inBedMinutes
+      existing.sleepWindowMinutes += night.sleepWindowMinutes
       if (night.wakeTime > existing.wakeTime) existing.wakeTime = night.wakeTime
       if (night.bedtime < existing.bedtime) existing.bedtime = night.bedtime
       for (const [label, value] of Object.entries(night.stagesMinutes)) {
@@ -1042,7 +1039,7 @@ export async function querySleep(uid: string, range: Range, timeZone: string) {
         bedtime: naps[0]!.time,
         wakeTime: naps[naps.length - 1]!.time,
         asleepMinutes: 0,
-        inBedMinutes: 0,
+        sleepWindowMinutes: 0,
         stagesMinutes: {},
         naps,
       })
