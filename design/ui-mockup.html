@@ -268,6 +268,13 @@
   .grp-note{font-size:11px;color:var(--muted);line-height:1.5;padding:0 14px 12px;margin:0}
   .totals{display:flex;gap:10px;margin:0 0 14px}
   .totals div{flex:1;background:#fff;border-radius:12px;padding:11px 12px;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+  .retrow{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--hair)}
+  .retrow:last-of-type{border-bottom:0}
+  .retrow .txt{flex:1;min-width:0}
+  .retrow .txt b{display:block;font-size:13.5px;font-weight:500}
+  .retrow .txt span{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
+  .retrow .end{font-size:13px;font-weight:600;color:var(--ink-2)}
+  .dot2{width:8px;height:8px;border-radius:50%;flex:none}
   .totals b{display:block;font-size:19px;letter-spacing:-.01em}
   .totals span{font-size:11px;color:var(--muted)}
   .phone.tall{height:auto}
@@ -585,12 +592,26 @@
       <div class="row"><div class="txt"><b>Connector ที่เชื่อมอยู่</b><span>Claude · เชื่อมเมื่อ 23 ต.ค.</span></div><div class="end">1 <em>เครื่อง</em></div></div>
     </div>
 
-    <h3 class="sec">ข้อมูล</h3>
-    <div class="card">
+    <h3 class="sec">ข้อมูล <span class="hint">134,182 เอกสาร</span></h3>
+    <div class="card" style="padding-bottom:4px">
       <div class="label">เก็บข้อมูลย้อนหลัง</div>
-      <div class="seg" style="margin-top:10px"><span>1 ปี</span><span class="on">2 ปี</span><span>5 ปี</span><span>ทั้งหมด</span></div>
-      <p style="margin:10px 2px 0;font-size:12.5px;color:var(--muted);line-height:1.5">
-        ข้อมูลที่เก่ากว่า 2 ปีจะถูกลบออกจาก Firestore อัตโนมัติ สรุปรายวันยังเก็บต่อเพราะเล็กมาก
+      <div class="retrow"><span class="dot2" style="background:#d0352b"></span>
+        <div class="txt"><b>ข้อมูลดิบความถี่สูง</b><span>ชีพจร ความเร็ว · 67,790</span></div><div class="end">7 วัน</div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="retrow"><span class="dot2" style="background:#2f7bff"></span>
+        <div class="txt"><b>ฟื้นตัวและการนอน</b><span>นอน HRV ชีพจรพัก · 32,775</span></div><div class="end">5 ปี</div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="retrow"><span class="dot2" style="background:#d9822b"></span>
+        <div class="txt"><b>การซ้อมและกิจกรรม</b><span>สรุปรายวัน · workout · 460</span></div><div class="end">5 ปี</div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="retrow"><span class="dot2" style="background:#1f9d55"></span>
+        <div class="txt"><b>ร่างกายและความฟิต</b><span>น้ำหนัก ไขมัน VO₂max · 232</span></div><div class="end">10 ปี</div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="retrow"><span class="dot2" style="background:#6b4bd8"></span>
+        <div class="txt"><b>เหตุการณ์และอื่น ๆ</b><span>ชีพจรผิดปกติ · 3</span></div><div class="end">10 ปี</div>
+        <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <p style="margin:2px 2px 12px;font-size:11.5px;color:var(--muted);line-height:1.5">
+        ที่นี่เป็นสำเนาเพื่อให้ AI อ่านได้ ต้นฉบับอยู่ที่ Apple Health เสมอ — ลบแล้วกดซิงก์ใหม่ก็ได้คืน (ย้อนได้ถึง 2 ปี)
       </p>
     </div>
     <div class="card">
@@ -856,7 +877,7 @@
   </div>
   <div class="screen">
     <div class="apphead"><h2>เก็บข้อมูลย้อนหลัง</h2></div>
-    <p class="fine" style="margin:0 0 14px">ตั้งแยกตามกลุ่มได้ เพราะแต่ละกลุ่มโตไม่เท่ากันและมีค่าไม่เท่ากัน — ข้อมูลดิบความถี่สูงโตวันละสองแสนเท่าของน้ำหนักตัว</p>
+    <p class="fine" style="margin:0 0 6px"><b>ที่นี่เป็นสำเนา ไม่ใช่ต้นฉบับ</b> — ข้อมูลจริงอยู่ที่ Apple Health เสมอ สิ่งที่เก็บที่นี่มีไว้ให้ AI อ่านและคำนวณค่าฐานได้เร็ว ทุกกลุ่มจึงมีวันหมดอายุ ไม่มีตัวเลือก "ไม่ลบ" และถ้าลบไปแล้วอยากได้คืน กดซิงก์ใหม่ทั้งหมดได้ (ย้อนได้ตามที่ Health เก็บไว้ สูงสุด 2 ปี)</p>
 
     <div class="totals">
       <div><b>134,182</b><span>เอกสารทั้งหมด</span></div>
@@ -865,11 +886,27 @@
 
     <div class="grp">
       <div class="grp-head">
+        <span class="icon" style="background:#feeceb;color:#d0352b">♡</span>
+        <div><h4>ข้อมูลดิบความถี่สูง</h4><div class="sub">4 ชนิด · 67,790 เอกสาร · โตวันละ ~500</div></div>
+        <span class="chev">⌄</span>
+      </div>
+      <div class="pills"><span class="on">7 วัน</span><span>14 วัน</span><span>30 วัน</span><span>90 วัน</span></div>
+      <div class="grp-list">
+        <div class="m"><b>ความเร็ววิ่ง</b><span class="tag">ดิบ</span><span class="n">36,124</span></div>
+        <div class="m"><b>ชีพจร</b><span class="tag">ดิบ</span><span class="n">31,084</span></div>
+        <div class="m"><b>ความเร็วเดิน</b><span class="tag">ดิบ</span><span class="n">293</span></div>
+        <div class="m"><b>ความยาวก้าว</b><span class="tag">ดิบ</span><span class="n">289</span></div>
+      </div>
+      <p class="grp-note">กลุ่มใหญ่ที่สุดและโตเร็วที่สุด · <b>ช่วงที่ออกกำลังกายไม่ถูกลบตามหน้าต่างนี้</b> แต่เก็บตามกลุ่มการซ้อม หน้าต่างนี้คุมเฉพาะชีพจรระหว่างวันธรรมดา ซึ่งสรุปรายชั่วโมงเก็บแทนไว้แล้ว</p>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">
         <span class="icon" style="background:#eaf1ff;color:#2f7bff">☾</span>
         <div><h4>ฟื้นตัวและการนอน</h4><div class="sub">5 ชนิด · 32,775 เอกสาร · โตปีละ ~16,000</div></div>
         <span class="chev">⌄</span>
       </div>
-      <div class="pills"><span>1 ปี</span><span>2 ปี</span><span class="on">5 ปี</span><span>ไม่ลบ</span></div>
+      <div class="pills"><span>1 ปี</span><span>2 ปี</span><span class="on">5 ปี</span><span>10 ปี</span></div>
       <div class="grp-list">
         <div class="m"><b>การนอน</b><span class="tag">ดิบ</span><span class="n">24,249</span></div>
         <div class="m"><b>HRV</b><span class="tag">ดิบ</span><span class="n">6,667</span></div>
@@ -877,24 +914,7 @@
         <div class="m"><b>ชีพจรตอนเดิน</b><span class="tag">ดิบ</span><span class="n">676</span></div>
         <div class="m"><b>อัตราหายใจ</b><span class="tag">ดิบ</span><span class="n">472</span></div>
       </div>
-      <p class="grp-note">กลุ่มเดียวที่ย้อนกลับไปเก็บใหม่ไม่ได้ถ้าหายไป และเป็นฐานของคะแนนความพร้อมทั้งหมด แนะนำ 5 ปีขึ้นไป</p>
-    </div>
-
-    <div class="grp">
-      <div class="grp-head">
-        <span class="icon" style="background:#eefaf0;color:#1f9d55">⚖</span>
-        <div><h4>ร่างกายและความฟิต</h4><div class="sub">5 ชนิด · 232 เอกสาร · โตปีละ ~60</div></div>
-        <span class="chev">⌄</span>
-      </div>
-      <div class="pills"><span>1 ปี</span><span>2 ปี</span><span>5 ปี</span><span class="on">ไม่ลบ</span></div>
-      <div class="grp-list">
-        <div class="m"><b>น้ำหนัก</b><span class="n">63</span></div>
-        <div class="m"><b>BMI</b><span class="n">63</span></div>
-        <div class="m"><b>ไขมัน</b><span class="n">51</span></div>
-        <div class="m"><b>มวลไร้ไขมัน</b><span class="n">51</span></div>
-        <div class="m"><b>ส่วนสูง</b><span class="n">4</span></div>
-      </div>
-      <p class="grp-note">ทั้งกลุ่มเล็กกว่าชีพจรวันเดียว การลบไม่ได้ประหยัดอะไร แต่ทำให้ดูแนวโน้มข้ามปีไม่ได้</p>
+      <p class="grp-note">เป็นฐานของคะแนนความพร้อมและค่าปกติทั้งหมด ยิ่งยาวยิ่งเทียบตัวเองได้แม่น · โตช้ามากเมื่อเทียบกับกลุ่มบน</p>
     </div>
 
     <div class="grp">
@@ -903,29 +923,30 @@
         <div><h4>การซ้อมและกิจกรรม</h4><div class="sub">7 ชนิด · เก็บเป็นสรุปรายวัน/รายชั่วโมง</div></div>
         <span class="chev">⌄</span>
       </div>
-      <div class="pills"><span>1 ปี</span><span class="on">2 ปี</span><span>5 ปี</span><span>ไม่ลบ</span></div>
+      <div class="pills"><span>1 ปี</span><span>2 ปี</span><span class="on">5 ปี</span><span>10 ปี</span></div>
       <div class="grp-list">
         <div class="m"><b>ก้าว · แคลอรี · ระยะทาง</b><span class="tag">สรุปเท่านั้น</span><span class="n">365/ปี</span></div>
         <div class="m"><b>นาทีออกกำลังกาย · ยืน</b><span class="tag">สรุปเท่านั้น</span><span class="n">365/ปี</span></div>
         <div class="m"><b>ออกกำลังกาย (workout)</b><span class="n">95</span></div>
       </div>
-      <p class="grp-note">ข้อมูลดิบของกลุ่มนี้ไม่ได้เก็บแล้ว เพราะสรุปรายวันให้คำตอบเดียวกันโดยใช้พื้นที่ 1 ใน 2,000</p>
+      <p class="grp-note">ข้อมูลดิบของกลุ่มนี้ไม่ได้เก็บแล้ว เพราะสรุปรายวันให้คำตอบเดียวกันโดยใช้พื้นที่ 1 ใน 2,000 · 5 ปีของทั้งกลุ่มยังเล็กกว่าชีพจรหนึ่งสัปดาห์</p>
     </div>
 
     <div class="grp">
       <div class="grp-head">
-        <span class="icon" style="background:#feeceb;color:#d0352b">♡</span>
-        <div><h4>ข้อมูลดิบความถี่สูง</h4><div class="sub">4 ชนิด · 67,790 เอกสาร · โตวันละ ~500</div></div>
+        <span class="icon" style="background:#eefaf0;color:#1f9d55">⚖</span>
+        <div><h4>ร่างกายและความฟิต</h4><div class="sub">5 ชนิด · 232 เอกสาร · โตปีละ ~60</div></div>
         <span class="chev">⌄</span>
       </div>
-      <div class="pills"><span class="on">7 วัน</span><span>14 วัน</span><span>30 วัน</span><span class="locked">ไม่ลบ</span></div>
+      <div class="pills"><span>1 ปี</span><span>2 ปี</span><span>5 ปี</span><span class="on">10 ปี</span></div>
       <div class="grp-list">
-        <div class="m"><b>ความเร็ววิ่ง</b><span class="tag">ดิบ</span><span class="n">36,124</span></div>
-        <div class="m"><b>ชีพจร</b><span class="tag">ดิบ</span><span class="n">31,084</span></div>
-        <div class="m"><b>ความเร็วเดิน</b><span class="tag">ดิบ</span><span class="n">293</span></div>
-        <div class="m"><b>ความยาวก้าว</b><span class="tag">ดิบ</span><span class="n">289</span></div>
+        <div class="m"><b>น้ำหนัก</b><span class="n">63</span></div>
+        <div class="m"><b>BMI</b><span class="n">63</span></div>
+        <div class="m"><b>ไขมัน</b><span class="n">51</span></div>
+        <div class="m"><b>มวลไร้ไขมัน</b><span class="n">51</span></div>
+        <div class="m"><b>ส่วนสูง</b><span class="n">4</span></div>
       </div>
-      <p class="grp-note"><b>ช่วงที่ออกกำลังกายเก็บตามกลุ่มการซ้อมเสมอ ไม่ถูกลบตามหน้าต่างนี้</b> — หน้าต่างนี้คุมเฉพาะชีพจรระหว่างวันธรรมดา ซึ่งสรุปรายชั่วโมงเก็บแทนไว้แล้ว</p>
+      <p class="grp-note">ทั้งกลุ่มเล็กกว่าชีพจรวันเดียว · ชั่งเดือนละครั้งก็ต้องเก็บหลายปีถึงจะเห็นแนวโน้ม</p>
     </div>
 
     <div class="grp">
@@ -934,15 +955,15 @@
         <div><h4>เหตุการณ์และอื่น ๆ</h4><div class="sub">1 ชนิด · 3 เอกสาร</div></div>
         <span class="chev">⌄</span>
       </div>
-      <div class="pills"><span>1 ปี</span><span>2 ปี</span><span class="on">5 ปี</span><span>ไม่ลบ</span></div>
-      <p class="grp-note">ชีพจรสูง/ต่ำผิดปกติ จังหวะหัวใจผิดปกติ การฝึกสติ — แทบไม่มีต้นทุน</p>
+      <div class="pills"><span>1 ปี</span><span>2 ปี</span><span>5 ปี</span><span class="on">10 ปี</span></div>
+      <p class="grp-note">ชีพจรสูง/ต่ำผิดปกติ จังหวะหัวใจผิดปกติ การฝึกสติ — นาน ๆ เกิดที แต่เป็นเรื่องที่อยากย้อนดูได้</p>
     </div>
 
-    <p class="fine">การลดจำนวนปีจะลบข้อมูลเดิมที่เกินช่วงภายใน 24 ชั่วโมงและกู้คืนไม่ได้ · การเพิ่มจะยืดอายุของเดิมให้ด้วย · ระบบจะถามยืนยันก่อนทุกครั้งที่ลด</p>
+    <p class="fine">ลดจำนวนลง = ลบของเดิมที่เกินช่วงภายใน 24 ชั่วโมง (ระบบจะถามยืนยันก่อน) · เพิ่มขึ้น = ยืดอายุของเดิมให้ด้วย ไม่ต้องซิงก์ใหม่</p>
   </div>
   <div class="homebar"></div>
 </div>
-<div class="caption">ตั้งค่า — เก็บข้อมูลแยกตามกลุ่ม</div>
+<div class="caption">ตั้งค่า → เก็บข้อมูลย้อนหลัง</div>
 </div>
 
 <!-- ============ LOADING STATES ============ -->
