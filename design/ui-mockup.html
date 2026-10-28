@@ -278,14 +278,18 @@
   .totals b{display:block;font-size:19px;letter-spacing:-.01em}
   .totals span{font-size:11px;color:var(--muted)}
   /* ---- heart-rate zones ---- */
-  /* A reference to glance at before a run: five equal blocks, nothing competing with them. */
+  /* A reference to glance at before a run: five equal blocks, nothing competing with them.
+     The boundaries sit underneath and are printed once each — a row of ranges repeats every
+     number twice, and the eye has to work out that the 137 on the left is the 137 on the right. */
   .zwrap{display:flex;gap:6px;margin-top:12px}
-  .zone{flex:1;min-width:0;border-radius:12px;padding:10px 2px 9px;text-align:center}
+  .zone{flex:1;min-width:0;border-radius:12px;padding:13px 2px;text-align:center}
   .zone .n{display:block;font-size:9.5px;font-weight:700;letter-spacing:.06em;opacity:.75}
-  /* The range has to stay on one line: "59–" above "124" reads as two numbers, not a span. */
-  .zone .bpm{display:block;font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;
-             margin-top:3px;white-space:nowrap}
-  .zone .nm{display:block;font-size:9.5px;margin-top:2px;opacity:.8}
+  .zone .nm{display:block;font-size:11px;font-weight:600;margin-top:3px}
+  /* Same gap as the blocks, so each boundary sits exactly under the edge it marks. */
+  .zbounds{position:relative;display:flex;gap:6px;margin-top:7px;height:14px}
+  .zbounds span{flex:1;min-width:0;text-align:right;font-size:10.5px;color:var(--muted);
+                font-variant-numeric:tabular-nums}
+  .zbounds .first{position:absolute;left:0;top:0;flex:none;text-align:left}
   .phone.tall{height:auto}
   .phone.tall .screen{height:auto;overflow:visible;padding-bottom:40px}
   .loadcard{margin:0 0 12px}
@@ -465,11 +469,14 @@
         <span class="info">i</span>
       </div>
       <div class="zwrap">
-        <div class="zone" style="background:#dbe6f6;color:#2f4f82"><span class="n">โซน 1</span><span class="bpm">59–124</span><span class="nm">ฟื้นตัว</span></div>
-        <div class="zone" style="background:#dcefcf;color:#3d6b28"><span class="n">โซน 2</span><span class="bpm">124–137</span><span class="nm">เบา</span></div>
-        <div class="zone" style="background:#faeec4;color:#8a6b14"><span class="n">โซน 3</span><span class="bpm">137–150</span><span class="nm">ปานกลาง</span></div>
-        <div class="zone" style="background:#fbdfc6;color:#9a5a1c"><span class="n">โซน 4</span><span class="bpm">150–163</span><span class="nm">หนัก</span></div>
-        <div class="zone" style="background:#f9d5d1;color:#9c3b33"><span class="n">โซน 5</span><span class="bpm">163–189</span><span class="nm">สูงสุด</span></div>
+        <div class="zone" style="background:#dbe6f6;color:#2f4f82"><span class="n">โซน 1</span><span class="nm">ฟื้นตัว</span></div>
+        <div class="zone" style="background:#dcefcf;color:#3d6b28"><span class="n">โซน 2</span><span class="nm">เบา</span></div>
+        <div class="zone" style="background:#faeec4;color:#8a6b14"><span class="n">โซน 3</span><span class="nm">ปานกลาง</span></div>
+        <div class="zone" style="background:#fbdfc6;color:#9a5a1c"><span class="n">โซน 4</span><span class="nm">หนัก</span></div>
+        <div class="zone" style="background:#f9d5d1;color:#9c3b33"><span class="n">โซน 5</span><span class="nm">สูงสุด</span></div>
+      </div>
+      <div class="zbounds">
+        <span class="first">59</span><span>124</span><span>137</span><span>150</span><span>163</span><span>189</span>
       </div>
     </div>
 
