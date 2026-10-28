@@ -278,25 +278,14 @@
   .totals b{display:block;font-size:19px;letter-spacing:-.01em}
   .totals span{font-size:11px;color:var(--muted)}
   /* ---- heart-rate zones ---- */
-  /* The tag sits above the active zone, so the bar needs clearance or it lands on the header. */
-  .zwrap{display:flex;gap:4px;margin-top:34px;align-items:flex-end}
-  .zone{flex:1;border-radius:9px;height:42px;position:relative;display:grid;place-items:center;
-        color:#fff;font-size:11px;font-weight:700;letter-spacing:.02em}
-  .zone.now{height:54px;box-shadow:0 0 0 3px #fff,0 0 0 5px currentColor;z-index:2}
-  .zone b{color:#fff}
-  .zlabels{display:flex;gap:4px;margin-top:7px}
-  .zlabels div{flex:1;text-align:center;font-size:9.5px;color:var(--muted);line-height:1.35}
-  .zlabels div b{display:block;font-size:11px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
-  .ztag{position:absolute;top:-26px;left:50%;transform:translateX(-50%);white-space:nowrap;
-        background:#1c1c1e;color:#fff;font-size:10px;font-weight:700;letter-spacing:.04em;
-        padding:3px 8px;border-radius:6px}
-  .ztag::after{content:"";position:absolute;left:50%;bottom:-4px;transform:translateX(-50%);
-               border-left:4px solid transparent;border-right:4px solid transparent;border-top:4px solid #1c1c1e}
-  .zhead{display:flex;align-items:baseline;gap:8px;margin-top:12px}
-  .zhead .big{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1}
-  .zhead .unit{font-size:14px;font-weight:600;color:var(--muted)}
-  .zhead .from{margin-left:auto;font-size:11.5px;color:var(--muted);text-align:right;line-height:1.45}
-  .zhead .from b{color:var(--ink)}
+  /* A reference to glance at before a run: five equal blocks, nothing competing with them. */
+  .zwrap{display:flex;gap:6px;margin-top:12px}
+  .zone{flex:1;min-width:0;border-radius:12px;padding:10px 2px 9px;text-align:center}
+  .zone .n{display:block;font-size:9.5px;font-weight:700;letter-spacing:.06em;opacity:.75}
+  /* The range has to stay on one line: "59–" above "124" reads as two numbers, not a span. */
+  .zone .bpm{display:block;font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;
+             margin-top:3px;white-space:nowrap}
+  .zone .nm{display:block;font-size:9.5px;margin-top:2px;opacity:.8}
   .phone.tall{height:auto}
   .phone.tall .screen{height:auto;overflow:visible;padding-bottom:40px}
   .loadcard{margin:0 0 12px}
@@ -473,30 +462,15 @@
     <div class="card">
       <div class="rhead">
         <span class="label">โซนหัวใจ</span>
-        <span class="stamp">จากชีพจรสูงสุดที่วัดได้ 189</span>
         <span class="info">i</span>
       </div>
-
-      <div class="zhead">
-        <span class="big">146</span><span class="unit">BPM</span>
-        <span class="from">รอบล่าสุด <b>25 ต.ค.</b><br>12.0 กม. · เฉลี่ยทั้งรอบ</span>
-      </div>
-
       <div class="zwrap">
-        <div class="zone" style="background:#4a74b8">1</div>
-        <div class="zone" style="background:#6cbf3a">2</div>
-        <div class="zone now" style="background:#e8c53d;color:#e8c53d"><b>3</b><span class="ztag">โซน 3 — ปานกลาง</span></div>
-        <div class="zone" style="background:#e8853d">4</div>
-        <div class="zone" style="background:#e0453a">5</div>
+        <div class="zone" style="background:#dbe6f6;color:#2f4f82"><span class="n">โซน 1</span><span class="bpm">59–124</span><span class="nm">ฟื้นตัว</span></div>
+        <div class="zone" style="background:#dcefcf;color:#3d6b28"><span class="n">โซน 2</span><span class="bpm">124–137</span><span class="nm">เบา</span></div>
+        <div class="zone" style="background:#faeec4;color:#8a6b14"><span class="n">โซน 3</span><span class="bpm">137–150</span><span class="nm">ปานกลาง</span></div>
+        <div class="zone" style="background:#fbdfc6;color:#9a5a1c"><span class="n">โซน 4</span><span class="bpm">150–163</span><span class="nm">หนัก</span></div>
+        <div class="zone" style="background:#f9d5d1;color:#9c3b33"><span class="n">โซน 5</span><span class="bpm">163–189</span><span class="nm">สูงสุด</span></div>
       </div>
-      <div class="zlabels">
-        <div><b>59–124</b>ฟื้นตัว</div>
-        <div><b>124–137</b>เบา</div>
-        <div><b>137–150</b>ปานกลาง</div>
-        <div><b>150–163</b>หนัก</div>
-        <div><b>163–189</b>สูงสุด</div>
-      </div>
-      <p class="batsay">รอบนั้นตั้งใจวิ่งเบา แต่เฉลี่ยอยู่โซน 3 — อากาศ 27°C ชื้น 88% ดันชีพจรขึ้นราว 10 ครั้ง/นาที</p>
     </div>
 
     <h3 class="sec">หัวใจและการหายใจ</h3>
