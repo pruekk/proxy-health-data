@@ -369,9 +369,12 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
   const stages = (lastNight?.stagesMinutes ?? {}) as Record<string, number>
   const inBedMinutes = typeof stages.inBed === 'number' ? stages.inBed : undefined
 
-  const hrvValues = sleepHrvNights.map(([, v]) => v.avg)
+  const hrvValues = sleepHrvNights.map(([, v]) => v.value)
   const hrv = useSleepHrv
-    ? { latest: hrvValues[hrvValues.length - 1]!, baseline: hrvValues.reduce((a, b) => a + b, 0) / hrvValues.length }
+    ? {
+        latest: median(hrvValues.slice(-SLEEP_HRV_RECENT_NIGHTS)),
+        baseline: median(hrvValues),
+      }
     : latestAndBaseline('heartRateVariabilitySDNN')
 
   return {
@@ -379,6 +382,8 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
     loadWindows: load ? { acuteDays: load.acuteDays, chronicDays: load.chronicDays, historyDays: load.historyDays } : undefined,
     hrvSource: useSleepHrv ? ('sleep' as const) : ('daily' as const),
     hrvNights: sleepHrvNights.length,
+    hrvRecentNights: useSleepHrv ? Math.min(SLEEP_HRV_RECENT_NIGHTS, sleepHrvNights.length) : undefined,
+    hrvLastNight: useSleepHrv ? sleepHrvNights[sleepHrvNights.length - 1]?.[1].value : undefined,
     restingHeartRate: latestAndBaseline('restingHeartRate'),
     sleepMinutes,
     inBedMinutes,
@@ -457,12 +462,16 @@ export async function sleepSessions(uid: string, range: Range, limit = 5000) {
 const NIGHT_MINUTES = 150
 
 /**
- * Average HRV measured while actually asleep, per night.
+ * HRV measured while actually asleep, per night.
  *
  * Apple publishes one daily average that mixes readings taken during a run, during a stressful
  * meeting and during sleep, which is why the same person's daily figure swings between 28 and
  * 115 ms. Only the sleeping readings are comparable night to night, so they are picked out here
  * and keyed by the morning the night ended on.
+ *
+ * The median, not the mean: the watch manages about three readings a night and they scatter
+ * wildly — one real night reads 53, 148 and 219 ms — so a single spike would otherwise set the
+ * whole night.
  */
 export async function sleepHrvByNight(uid: string, range: Range, timeZone: string) {
   const dayOf = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -483,11 +492,14 @@ export async function sleepHrvByNight(uid: string, range: Range, timeZone: strin
   }
 
   return new Map(
-    [...readings].map(([date, values]) => [
-      date,
-      { avg: values.reduce((a, b) => a + b, 0) / values.length, count: values.length },
-    ]),
+    [...readings].map(([date, values]) => [date, { value: median(values), count: values.length }]),
   )
+}
+
+function median(values: number[]) {
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2
 }
 
 /** Ninety nights of stage samples runs to a few thousand documents; the cap is a ceiling that
@@ -496,6 +508,14 @@ const BASELINE_SAMPLE_LIMIT = 20_000
 
 /** Nights of sleeping HRV needed before it is trusted over Apple's daily average. */
 const SLEEP_HRV_MINIMUM_NIGHTS = 14
+
+/**
+ * Nights the current figure is taken over. One night is not usable: with three readings a night
+ * the figure moves 38 ms from one morning to the next, which is most of the range it lives in.
+ * Three nights cuts that to 13 and still answers "how is this week going" rather than "how is
+ * this month going".
+ */
+const SLEEP_HRV_RECENT_NIGHTS = 3
 
 /** Days of history simulated so the level carried into this morning is itself earned. */
 const BATTERY_HISTORY_DAYS = catalog.battery.historyDays

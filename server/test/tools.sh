@@ -466,6 +466,37 @@ utc = n["wakeTime"][:10] + " " + n["wakeTime"][11:16]
 print("same" if local == utc else local + " vs " + utc)')"
 check "workouts carry one as well" "1" "$(call_est get_workouts '{"days":365,"limit":1}' | python3 -c 'import sys,json;w=json.load(sys.stdin)["workouts"];print(1 if w and w[0].get("startLocal") else 0)')"
 
+echo "25. sleeping HRV is a median over several nights, not one noisy reading"
+python3 - "$B" "$EST_TOKEN" <<'PY2'
+import json, sys, urllib.request
+from datetime import datetime, timedelta, timezone
+base, token = sys.argv[1], sys.argv[2]
+now = datetime.now(timezone.utc).replace(microsecond=0)
+samples = []
+# Twenty nights, each with three readings around 60 ms — and one reading a night that spikes,
+# the way a wrist sensor does. A mean would follow the spikes; a median should not.
+for night in range(20):
+    end = (now - timedelta(days=night)).replace(hour=6, minute=0, second=0)
+    start = end - timedelta(hours=7)
+    samples.append({"id": "hrvsleep-%02d-0000-0000-00000000000a" % night, "type": "sleepAnalysis",
+                    "kind": "category", "value": 3, "valueLabel": "asleepCore",
+                    "startDate": start.isoformat(), "endDate": end.isoformat()})
+    for i, value in enumerate((58, 60, 200)):
+        at = start + timedelta(hours=i + 1)
+        samples.append({"id": "hrvval-%02d-%d-0000-00000000000b" % (night, i), "type": "heartRateVariabilitySDNN",
+                        "kind": "quantity", "value": value, "unit": "ms",
+                        "startDate": at.isoformat(), "endDate": at.isoformat()})
+req = urllib.request.Request(base + "/v1/sync", data=json.dumps({"timeZone": "UTC", "samples": samples}).encode(),
+    headers={"content-type": "application/json", "authorization": "Bearer " + token})
+urllib.request.urlopen(req)
+print("  seeded 20 nights of 58/60/200 ms readings")
+PY2
+R=$(call_est get_training_readiness '{}')
+check "switches to the sleeping figure" "sleep" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="hrv"];print(f[0].get("source") if f else "none")')"
+check "the spike does not set the night" "60" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="hrv"];print(round(f[0]["value"]) if f else 0)')"
+check "nor the baseline" "60" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="hrv"];print(round(f[0]["baseline"]) if f else 0)')"
+check "says how it was worked out" "1" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="hrv"];print(1 if "คืน" in (f[0].get("note") or "") else 0)')"
+
 echo
 echo "passed: $pass  failed: $fail"
 [ "$fail" -eq 0 ]

@@ -27,6 +27,10 @@ export interface ReadinessInputs {
   hrvSource?: 'sleep' | 'daily'
   /** Nights of sleeping HRV available, which is what decides the source above. */
   hrvNights?: number
+  /** Nights the current figure is taken over, since one night of it is mostly noise. */
+  hrvRecentNights?: number
+  /** Last night on its own, for a reader who wants to see what the smoothing covered. */
+  hrvLastNight?: number
 }
 
 export type FactorKey = 'hrv' | 'restingHeartRate' | 'sleep' | 'load'
@@ -84,6 +88,10 @@ export function computeReadiness(inputs: ReadinessInputs) {
       value: round(inputs.hrv.latest),
       baseline: round(inputs.hrv.baseline),
       source: inputs.hrvSource,
+      note:
+        inputs.hrvSource === 'sleep' && inputs.hrvRecentNights
+          ? `ค่ากลางตอนหลับ ${inputs.hrvRecentNights} คืน${inputs.hrvLastNight !== undefined ? ` · เมื่อคืน ${round(inputs.hrvLastNight)}` : ''}`
+          : undefined,
       deviation: `${percent >= 0 ? '+' : '−'}${Math.abs(round(percent, 0))}%`,
       changePercent: round(percent, 0),
       direction: percent >= -5 ? 'good' : percent >= -15 ? 'watch' : 'bad',
