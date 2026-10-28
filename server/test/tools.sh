@@ -416,6 +416,50 @@ else
   echo "  skipped: no workout seeded for this user"
 fi
 
+echo "22. a day with nothing recorded counts as zero, not as missing"
+python3 - "$B" "$EST_TOKEN" <<'PY2'
+import json, sys, urllib.request
+base, token = sys.argv[1], sys.argv[2]
+# Four days in a ten-day window carry exercise; the other six carry nothing at all.
+stats = [{"date": d, "type": "appleExerciseTime", "unit": "min", "sum": 60}
+         for d in ("2026-04-02", "2026-04-04", "2026-04-06", "2026-04-08")]
+req = urllib.request.Request(base + "/v1/sync", data=json.dumps({"timeZone": "UTC", "dailyStats": stats}).encode(),
+    headers={"content-type": "application/json", "authorization": "Bearer " + token})
+urllib.request.urlopen(req)
+print("  seeded 4 days of 60 minutes inside a 10-day window")
+PY2
+M=$(call_est get_metric_stats '{"types":["appleExerciseTime"],"from":"2026-04-01","to":"2026-04-10"}')
+check "averages over recorded days as before" "60" "$(echo "$M" | python3 -c 'import sys,json;print(round(json.load(sys.stdin)["metrics"]["appleExerciseTime"]["avg"]))')"
+check "and over every day in the range too" "24" "$(echo "$M" | python3 -c 'import sys,json;print(round(json.load(sys.stdin)["metrics"]["appleExerciseTime"]["avgPerDayInRange"]))')"
+check "says how many days carry a reading" "4" "$(echo "$M" | python3 -c 'import sys,json;print(json.load(sys.stdin)["metrics"]["appleExerciseTime"]["days"])')"
+check "and how many the range covers" "10" "$(echo "$M" | python3 -c 'import sys,json;print(json.load(sys.stdin)["daysInRange"])')"
+check "a discrete metric gets no per-day figure" "1" "$(call_est get_metric_stats '{"types":["restingHeartRate"],"from":"2026-04-01","to":"2026-04-10"}' | python3 -c 'import sys,json;print(0 if "avgPerDayInRange" in json.load(sys.stdin)["metrics"]["restingHeartRate"] else 1)')"
+
+echo "23. heart-rate zones come from the rate actually recorded"
+C=$(call_est get_cardio_fitness '{}')
+check "reports a maximum" "1" "$(echo "$C" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["heartRate"]["max"] else 0)')"
+check "says where it came from" "1" "$(echo "$C" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin)["heartRate"]["source"] in ("measured","estimated") else 0)')"
+check "five zones, ending at the maximum" "1" "$(echo "$C" | python3 -c '
+import sys, json
+h = json.load(sys.stdin)["heartRate"]
+print(1 if len(h["zones"]) == 5 and h["zones"][-1]["to"] == h["max"] else 0)')"
+check "zones rise without gaps" "1" "$(echo "$C" | python3 -c '
+import sys, json
+z = json.load(sys.stdin)["heartRate"]["zones"]
+print(1 if all(z[i]["to"] == z[i+1]["from"] for i in range(len(z)-1)) else 0)')"
+
+echo "24. times carry the user's own clock, not just UTC"
+S=$(call_est get_sleep '{"from":"2026-02-10","to":"2026-02-10"}')
+check "sleep carries a local reading" "1" "$(echo "$S" | python3 -c 'import sys,json;n=json.load(sys.stdin)["nights"];print(1 if n and n[0].get("wakeTimeLocal") else 0)')"
+# This user is on UTC, so both readings of the same instant must agree.
+check "and it matches the UTC stamp" "same" "$(echo "$S" | python3 -c '
+import sys, json
+n = json.load(sys.stdin)["nights"][0]
+local = n["wakeTimeLocal"]
+utc = n["wakeTime"][:10] + " " + n["wakeTime"][11:16]
+print("same" if local == utc else local + " vs " + utc)')"
+check "workouts carry one as well" "1" "$(call_est get_workouts '{"days":365,"limit":1}' | python3 -c 'import sys,json;w=json.load(sys.stdin)["workouts"];print(1 if w and w[0].get("startLocal") else 0)')"
+
 echo
 echo "passed: $pass  failed: $fail"
 [ "$fail" -eq 0 ]

@@ -3,6 +3,8 @@
 
 import { catalog } from './catalog'
 import { paceLabel, splitsFromDistance } from './splits'
+import { daysBetween } from './load'
+import { heartRateZones } from './zones'
 import { parseDateKeys, parseRange } from './dates'
 import { computeBattery } from './battery'
 import {
@@ -137,19 +139,35 @@ function classifyVo2(value: number, age?: number, sex?: unknown) {
 }
 
 // first/last/min/avg/max over a daily series, picking whichever field the metric uses.
-function summarize(points: DocumentDataLike[]) {
+/** Metrics that accumulate through the day, where a day with no entry means zero rather than
+ *  unknown — steps, energy, exercise minutes. Averaging only the recorded days overstates them. */
+const CUMULATIVE = new Set(catalog.quantities.filter((q) => q.aggregation === 'cumulative').map((q) => q.key))
+
+function summarize(points: DocumentDataLike[], options?: { daysInRange?: number; cumulative?: boolean }) {
   const values = points.map((p) => (typeof p.sum === 'number' ? p.sum : p.avg)).filter((v): v is number => typeof v === 'number')
   if (!values.length) return null
   const mins = points.map((p) => p.min).filter((v): v is number => typeof v === 'number')
   const maxes = points.map((p) => p.max).filter((v): v is number => typeof v === 'number')
   const first = values[0]!
   const last = values[values.length - 1]!
+  const total = values.reduce((a, b) => a + b, 0)
+  const daysInRange = options?.daysInRange
   return {
+    /** Days that carry a reading, which for a cumulative metric is fewer than the range. */
     days: values.length,
+    daysInRange,
     first: { date: points[0]!.date, value: first },
     last: { date: points[points.length - 1]!.date, value: last },
     change: Number((last - first).toFixed(3)),
-    avg: Number((values.reduce((a, b) => a + b, 0) / values.length).toFixed(3)),
+    avg: Number((total / values.length).toFixed(3)),
+    // A day with no steps recorded is a day of no steps. Averaging over recorded days only
+    // answers "on the days I moved", which is a different question and a larger number.
+    ...(options?.cumulative && daysInRange
+      ? {
+          avgPerDayInRange: Number((total / daysInRange).toFixed(3)),
+          total: Number(total.toFixed(3)),
+        }
+      : {}),
     min: Math.min(...(mins.length ? mins : values)),
     max: Math.max(...(maxes.length ? maxes : values)),
   }
@@ -265,8 +283,15 @@ const tools: Tool[] = [
       },
     },
     run: async (uid, args) => {
-      const workouts = await queryWorkouts(uid, parseRange(str(args.from), str(args.to), 30), num(args.limit, 50, 500), str(args.activityType))
-      return { count: workouts.length, workouts }
+      const timeZone = await timeZoneOf(uid)
+      const workouts = await queryWorkouts(
+        uid,
+        parseRange(str(args.from), str(args.to), 30),
+        num(args.limit, 50, 500),
+        str(args.activityType),
+        timeZone,
+      )
+      return { count: workouts.length, timeZone, workouts }
     },
   },
   {
@@ -338,7 +363,7 @@ const tools: Tool[] = [
     name: 'get_metric_stats',
     title: 'Metric stats and trend',
     description:
-      'First, last, change, average, min and max for each requested metric over a date range, computed from the de-duplicated daily aggregates. Use this for "is my VO2 max improving?" or "how much weight did I lose?" instead of pulling raw samples.',
+      'First, last, change, average, min and max for each requested metric over a date range, computed from the de-duplicated daily aggregates. Use this for "is my VO2 max improving?" or "how much weight did I lose?" instead of pulling raw samples. `days` is how many days carry a reading and `daysInRange` how many the range covers; for metrics that accumulate through the day, `avgPerDayInRange` and `total` treat a day with no reading as zero rather than leaving it out of the average.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -352,11 +377,20 @@ const tools: Tool[] = [
       if (!types.length) throw new BadRequest('`types` is required, e.g. ["vo2Max", "bodyMass"]')
       const keys = parseDateKeys(str(args.from), str(args.to), 90, await timeZoneOf(uid))
       const series = await dailySeries(uid, keys.from, keys.to, types)
+      const daysInRange = daysBetween(keys.from, keys.to) + 1
       return {
         ...keys,
+        daysInRange,
         metrics: Object.fromEntries(
-          types.map((type) => [type, summarize((series[type] ?? []) as DocumentDataLike[]) ?? { days: 0 }]),
+          types.map((type) => [
+            type,
+            summarize((series[type] ?? []) as DocumentDataLike[], { daysInRange, cumulative: CUMULATIVE.has(type) }) ?? {
+              days: 0,
+              daysInRange,
+            },
+          ]),
         ),
+        note: 'avg is over the days that carry a reading. For metrics that accumulate through the day (steps, energy, exercise minutes) avgPerDayInRange divides by every day in the range instead, counting a day with no reading as zero — which is usually the figure a question about "per day" is after.',
       }
     },
   },
@@ -478,7 +512,7 @@ const tools: Tool[] = [
     name: 'get_cardio_fitness',
     title: 'Cardio fitness',
     description:
-      'VO2 max (what Apple shows as Cardio Fitness) over time with its trend, alongside resting heart rate, HRV and heart rate recovery. Includes a low/below average/above average/high level when the profile has date of birth and biological sex. When Apple has published no value — it needs a qualifying outdoor workout and a complete Health profile — an estimate from the resting-to-maximum heart rate ratio is returned instead, marked `source: "estimated"` with its inputs.',
+      'VO2 max (what Apple shows as Cardio Fitness) over time with its trend, alongside resting heart rate, HRV and heart rate recovery — and the training heart-rate zones under `heartRate`. Use those zones rather than estimating a maximum heart rate: `heartRate.max` is the highest rate actually recorded in a workout (with `measuredAt` and how many workouts were considered), falling back to an age formula only when too few workouts have one, which `source` says. Zones are percentages of heart rate reserve, so they already account for resting pulse. Includes a low/below average/above average/high VO2 level when the profile has date of birth and biological sex. When Apple has published no VO2 value — it needs a qualifying outdoor workout and a complete Health profile — an estimate from the resting-to-maximum heart rate ratio is returned instead, marked `source: "estimated"` with its inputs.',
     inputSchema: { type: 'object', properties: { ...dayRange } },
     run: async (uid, args) => {
       const profile = await getProfile(uid)
@@ -488,23 +522,39 @@ const tools: Tool[] = [
       const measured = vo2.at(-1)?.avg as number | undefined
       const age = ageFrom(profile.dateOfBirth)
 
+      // The zones every pace and effort cap rests on, from the heart rate the watch has actually
+      // recorded rather than an age formula re-guessed in each conversation.
+      const timeZone = String(profile.timeZone ?? 'UTC')
+      const recent = await queryWorkouts(uid, parseRange(undefined, undefined, 365), 400, undefined, timeZone)
+      const withMax = recent
+        .map((w) => ({ value: w.maxHeartRate as number | undefined, at: String(w.startLocal ?? w.startDate ?? '').slice(0, 10) }))
+        .filter((w): w is { value: number; at: string } => typeof w.value === 'number')
+        .sort((a, b) => b.value - a.value)
+      const restingSeries = (series.restingHeartRate ?? []) as DocumentDataLike[]
+      const restingValues = restingSeries
+        .slice(-catalog.heartRate.restingMedianDays)
+        .map((p) => p.avg)
+        .filter((v): v is number => typeof v === 'number')
+        .sort((a, b) => a - b)
+      const zones = heartRateZones({
+        observedMax: withMax[0] ? { value: Math.round(withMax[0].value), at: withMax[0].at, workouts: withMax.length } : undefined,
+        restingHeartRate: restingValues.length ? Math.round(restingValues[Math.floor(restingValues.length / 2)]!) : undefined,
+        age,
+      })
+
       // Apple only emits VO2 max after a qualifying outdoor workout, and stops altogether when
       // the Health profile is missing height or date of birth. Fall back to an estimate so the
       // number is still answerable, clearly marked as such.
       let estimate: ReturnType<typeof estimateVo2Max> = null
       if (measured === undefined) {
         const restingHr = (series.restingHeartRate ?? []).at(-1)?.avg as number | undefined
-        const workouts = await queryWorkouts(uid, parseRange(undefined, undefined, 90), 200)
-        const observedMaxHr = workouts
-          .map((w) => w.maxHeartRate as number | undefined)
-          .filter((v): v is number => typeof v === 'number')
-          .sort((a, b) => b - a)[0]
-        estimate = estimateVo2Max(restingHr, observedMaxHr, age)
+        estimate = estimateVo2Max(restingHr, withMax[0]?.value, age)
       }
       const current = measured ?? estimate?.value
 
       return {
         ...keys,
+        heartRate: zones,
         vo2Max: {
           unit: 'mL/kg/min',
           current: current ?? null,

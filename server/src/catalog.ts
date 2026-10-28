@@ -173,6 +173,38 @@ const battery = {
   max: 100,
 }
 
+/**
+ * Training load, as an acute-to-chronic workload ratio. The chronic window grows with the
+ * history available rather than being fixed: someone four weeks into running has no ninety-day
+ * normal to be compared against, and comparing them to one makes every week look like a spike.
+ */
+const load = {
+  acuteDays: 7,
+  /** Shortest chronic window worth comparing against — the sports-science convention. */
+  minChronicDays: 28,
+  /** And the longest, once there is enough history to fill it. */
+  maxChronicDays: 90,
+}
+
+/**
+ * Heart-rate zones, from the heart rate actually recorded rather than an age formula. Percentages
+ * are of heart rate reserve (Karvonen), which accounts for resting pulse instead of treating
+ * everyone with the same maximum as identical.
+ */
+const heartRate = {
+  /** Workouts with a maximum reading needed before the observed maximum is trusted. */
+  minWorkoutsForMax: 5,
+  /** Days of resting pulse taken for the median the zones are built on. */
+  restingMedianDays: 30,
+  zones: [
+    { zone: 1, name: 'ฟื้นตัว', from: 0.5, to: 0.6 },
+    { zone: 2, name: 'เบา (แอโรบิก)', from: 0.6, to: 0.7 },
+    { zone: 3, name: 'ปานกลาง', from: 0.7, to: 0.8 },
+    { zone: 4, name: 'หนัก (threshold)', from: 0.8, to: 0.9 },
+    { zone: 5, name: 'สูงสุด', from: 0.9, to: 1 },
+  ],
+}
+
 const body = {
   quantities,
   categories,
@@ -184,6 +216,8 @@ const body = {
   characteristics: ['HKCharacteristicTypeIdentifierDateOfBirth', 'HKCharacteristicTypeIdentifierBiologicalSex'],
   display,
   battery,
+  load,
+  heartRate,
   sync: {
     extendedBackfillDays: 730,
     workoutDetailLimit: 40,

@@ -13,8 +13,10 @@ export interface ReadinessInputs {
   sleepMinutes?: number
   /** Minutes in bed, which is the figure people remember; shown for context, never scored. */
   inBedMinutes?: number
-  /** Exercise minutes: recent average against the long-run average. */
+  /** Exercise minutes per day: the recent average against the long-run average. */
   load?: { acute: number; chronic: number }
+  /** The windows those averages were taken over, which the chronic one grows into. */
+  loadWindows?: { acuteDays: number; chronicDays: number; historyDays: number }
   /** Target night's sleep in minutes. */
   sleepTargetMinutes?: number
   /** When the night ended, in ISO. Not scored — it is the anchor the day's score is tied to. */
@@ -141,6 +143,9 @@ export function computeReadiness(inputs: ReadinessInputs) {
       baseline: round(inputs.load.chronic, 0),
       deviation: `${round(ratio, 2)}×`,
       changePercent: round((ratio - 1) * 100, 0),
+      note: inputs.loadWindows
+        ? `เฉลี่ย ${inputs.loadWindows.acuteDays} วันล่าสุด เทียบ ${inputs.loadWindows.chronicDays} วัน`
+        : undefined,
       direction: ratio <= 1.3 ? 'good' : ratio <= 1.6 ? 'watch' : 'bad',
     })
   } else {

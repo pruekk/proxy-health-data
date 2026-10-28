@@ -11,6 +11,7 @@ import type {
 } from './schemas'
 import { catalog } from './catalog'
 import { computeBattery, groupSleep, type BatteryInputs } from './battery'
+import { loadWindows } from './load'
 import { computeReadiness, shouldLockReadiness } from './readiness'
 import type { ReadinessInputs } from './readiness'
 
@@ -341,14 +342,14 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
     return { latest: values[values.length - 1]!, baseline: values.reduce((a, b) => a + b, 0) / values.length }
   }
 
-  // Acute load is the last week of exercise minutes, chronic the whole window.
-  const exercise = (series.appleExerciseTime ?? []).map((p) => p.sum ?? 0)
-  const load = exercise.length >= 7
-    ? {
-        acute: exercise.slice(-7).reduce((a, b) => a + b, 0) / 7,
-        chronic: exercise.reduce((a, b) => a + b, 0) / exercise.length,
-      }
-    : undefined
+  // Keyed by date so a day with no exercise counts as zero rather than dropping out of the
+  // average — the series only carries days that have a reading.
+  const exerciseByDate = new Map(
+    (series.appleExerciseTime ?? [])
+      .filter((p) => typeof p.date === 'string')
+      .map((p) => [String(p.date), Number(p.sum ?? 0)]),
+  )
+  const load = loadWindows(exerciseByDate, key(today))
 
   // Last night only: readiness is about today. querySleep returns newest first, and the oldest
   // entry in the window is usually a night cut in half by the window's start — taking it gave a
@@ -380,6 +381,7 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
 
   return {
     hrv,
+    loadWindows: load ? { acuteDays: load.acuteDays, chronicDays: load.chronicDays, historyDays: load.historyDays } : undefined,
     hrvSource: useSleepHrv ? ('sleep' as const) : ('daily' as const),
     hrvNights: sleepHrvNights.length,
     restingHeartRate: latestAndBaseline('restingHeartRate'),
@@ -806,7 +808,7 @@ export async function getWorkout(uid: string, id: string): Promise<DocumentData 
   return { id: doc.id, ...data, ...weatherOf(data.metadata) }
 }
 
-export async function queryWorkouts(uid: string, range: Range, limit: number, activityType?: string) {
+export async function queryWorkouts(uid: string, range: Range, limit: number, activityType?: string, timeZone?: string) {
   // Equality on activityTypeName is served by the automatic single-field index, so an activity
   // filter no longer means reading 1000 docs and throwing most of them away.
   let query = workoutsCol(uid)
@@ -816,7 +818,13 @@ export async function queryWorkouts(uid: string, range: Range, limit: number, ac
   const snap = await query.orderBy('startDate', 'desc').limit(limit).get()
   return snap.docs.map((d): DocumentData => {
     const data = plain(d.data())
-    return { id: d.id, ...data, ...weatherOf(data.metadata) }
+    return {
+      id: d.id,
+      ...data,
+      // "Was this the morning run or the evening one" is unanswerable from a UTC stamp alone.
+      startLocal: timeZone ? localClock(String(data.startDate), timeZone) : undefined,
+      ...weatherOf(data.metadata),
+    }
   })
 }
 
@@ -878,6 +886,31 @@ const ASLEEP = new Set(['asleepUnspecified', 'asleepCore', 'asleepDeep', 'asleep
 // Taking `[length - 1]` here means the oldest night, which is usually one the window cut in half.
 // When several sources recorded the same night (Watch, iPhone, third-party), the source
 // with the most asleep time is reported so stages are not double counted.
+/**
+ * The same instant written in the user's own clock, "2026-10-27 23:25".
+ *
+ * Everything stored here is UTC, which reads as a different evening in Bangkok: a bedtime of
+ * 16:25Z is 23:25 local. A reader who forgets to convert reports the wrong hour, and that has
+ * already happened — so the local reading travels with the timestamp rather than being left as
+ * an exercise for whoever renders it.
+ */
+export function localClock(iso: string | undefined, timeZone: string) {
+  if (!iso) return undefined
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return undefined
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(at)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '00'
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`
+}
+
 /** Minutes covered by a set of intervals, counting overlap once. Two sources recording the
  *  same night, or a stage sample inside another, must not add up to twice the sleep. */
 function unionMinutes(intervals: { from: number; to: number }[]) {
@@ -1016,5 +1049,14 @@ export async function querySleep(uid: string, range: Range, timeZone: string) {
     }
   }
 
-  return [...nights.values()].sort((a, b) => b.date.localeCompare(a.date))
+  // The local reading is derived once, at the end: carrying a second copy through the merge
+  // above let the two drift apart the moment a night arrived in two stretches.
+  return [...nights.values()]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((night) => ({
+      ...night,
+      bedtimeLocal: localClock(night.bedtime, timeZone),
+      wakeTimeLocal: localClock(night.wakeTime, timeZone),
+      naps: night.naps.map((nap) => ({ ...nap, timeLocal: localClock(nap.time, timeZone) })),
+    }))
 }
