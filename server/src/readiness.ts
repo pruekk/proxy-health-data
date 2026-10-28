@@ -11,6 +11,9 @@ export interface ReadinessInputs {
   restingHeartRate?: { latest: number; baseline: number }
   /** Minutes actually asleep last night. */
   sleepMinutes?: number
+  /** What a normal night is for this user. Context only — scoring stays against the target,
+   *  since a personal normal of six and a half hours is the problem, not the measure. */
+  usualSleepMinutes?: number
   /** Minutes in bed, which is the figure people remember; shown for context, never scored.
    *  Only worth showing when it is meaningfully longer than the time asleep — this watch
    *  sometimes reports the two as the same number, and "6:28/6:28" tells a reader nothing. */
@@ -52,6 +55,8 @@ export interface Factor {
   secondary?: string
   /** Where the number came from, when there is more than one possible source. */
   source?: 'sleep' | 'daily'
+  /** The user's own normal, where one exists and differs from the target being scored against. */
+  usualMinutes?: number
   direction: 'good' | 'watch' | 'bad'
 }
 
@@ -135,7 +140,13 @@ export function computeReadiness(inputs: ReadinessInputs) {
       // Scored on time asleep — the recovery signal — while the remembered figure is usually
       // time in bed, so the gap is shown rather than left to look like an error.
       changePercent: round((ratio - 1) * 100, 0),
-      note: inBed !== undefined ? `บนเตียง ${clock(inBed)}` : undefined,
+      note: [
+        inBed !== undefined ? `บนเตียง ${clock(inBed)}` : undefined,
+        inputs.usualSleepMinutes !== undefined ? `ปกติของคุณ ${clock(inputs.usualSleepMinutes)}` : undefined,
+      ]
+        .filter(Boolean)
+        .join(' · ') || undefined,
+      usualMinutes: inputs.usualSleepMinutes,
       secondary: inBed !== undefined ? clock(inBed) : undefined,
       direction: ratio >= 0.9 ? 'good' : ratio >= 0.75 ? 'watch' : 'bad',
     })

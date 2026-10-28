@@ -21,6 +21,7 @@ import {
   querySamples,
   querySleep,
   queryWorkouts,
+  sleepBaseline,
 } from './store'
 
 const SUPPORTED_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05']
@@ -189,7 +190,9 @@ const tools: Tool[] = [
     },
     run: async (uid, args) => ({
       profile: await getProfile(uid),
-      metrics: await listMetrics(uid, undefined, args.withSources === true),
+      // Counted exactly rather than read off the running counter, which never saw the documents
+      // written before it existed and does not come down when retention deletes.
+      metrics: await listMetrics(uid, undefined, args.withSources === true, true),
     }),
   },
   {
@@ -298,13 +301,16 @@ const tools: Tool[] = [
     name: 'get_sleep',
     title: 'Sleep',
     description:
-      'Nightly sleep: bedtime, wake time (both also as the user\'s local clock), total asleep minutes, the sleep window from first to last sample, and minutes per stage (asleepCore, asleepDeep, asleepREM, awake, inBed). Nights are keyed by the local date sleep ended, and a night broken by an hour awake is reported as one night rather than two. Daytime sleep is listed separately under `naps` instead of being added to the night, which otherwise reads as a night hours longer than it was with a wake time in the evening. Time in bed is only known when the watch records an `inBed` stage, in which case it appears in stagesMinutes; `sleepWindowMinutes` is not a substitute for it.',
+      'Nightly sleep: bedtime, wake time (both also as the user\'s local clock), total asleep minutes, the sleep window from first to last sample, and minutes per stage (asleepCore, asleepDeep, asleepREM, awake, inBed). Nights are keyed by the local date sleep ended, and a night broken by an hour awake is reported as one night rather than two. Daytime sleep is listed separately under `naps` instead of being added to the night, which otherwise reads as a night hours longer than it was with a wake time in the evening. Time in bed is only known when the watch records an `inBed` stage, in which case it appears in stagesMinutes; `sleepWindowMinutes` is not a substitute for it. `baseline` carries this user\'s own medians over the last ninety nights — total sleep and each stage — so a night can be called short or a deep-sleep figure called low against what is normal for them rather than against a population figure.',
     inputSchema: { type: 'object', properties: { ...range } },
     run: async (uid, args) => {
       const r = parseRange(str(args.from), str(args.to), 7)
       // Pull samples from 18h earlier so the first night's bedtime is included.
-      const nights = await querySleep(uid, { from: new Date(r.from.getTime() - 18 * 3_600_000), to: r.to }, await timeZoneOf(uid))
-      return { nights }
+      const [nights, baseline] = await Promise.all([
+        querySleep(uid, { from: new Date(r.from.getTime() - 18 * 3_600_000), to: r.to }, await timeZoneOf(uid)),
+        sleepBaseline(uid),
+      ])
+      return { nights, baseline: baseline ?? null }
     },
   },
   {

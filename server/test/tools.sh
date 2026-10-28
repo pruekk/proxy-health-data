@@ -497,6 +497,18 @@ check "the spike does not set the night" "60" "$(echo "$R" | python3 -c 'import 
 check "nor the baseline" "60" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="hrv"];print(round(f[0]["baseline"]) if f else 0)')"
 check "says how it was worked out" "1" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="hrv"];print(1 if "คืน" in (f[0].get("note") or "") else 0)')"
 
+echo "26. coverage reports what is held, and what normal looks like"
+check "firstAt is the oldest sample still stored" "1" "$(call_est list_metrics '{}' | python3 -c '
+import sys, json
+m = [x for x in json.load(sys.stdin)["metrics"] if x["type"] == "sleepAnalysis"]
+# Both fields present, and the oldest held can never predate the oldest ever synced.
+print(1 if m and m[0].get("firstAt") and m[0].get("firstSyncedAt") and m[0]["firstAt"] >= m[0]["firstSyncedAt"] else 0)')"
+S=$(call_est get_sleep '{"days":3}')
+check "sleep carries a personal baseline" "1" "$(echo "$S" | python3 -c 'import sys,json;b=json.load(sys.stdin).get("baseline");print(1 if b and b["nights"] >= 14 else 0)')"
+check "the baseline is in minutes of sleep" "1" "$(echo "$S" | python3 -c 'import sys,json;b=json.load(sys.stdin)["baseline"];print(1 if 200 < b["asleepMinutes"] < 700 else 0)')"
+R=$(call_est get_training_readiness '{}')
+check "readiness names the user own normal" "1" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="sleep"];print(1 if f and "ปกติของคุณ" in (f[0].get("note") or "") else 0)')"
+
 echo
 echo "passed: $pass  failed: $fail"
 [ "$fail" -eq 0 ]

@@ -247,6 +247,29 @@
   .badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:999px;
          background:#ececf1;color:#6b6b73;vertical-align:5px;margin-left:8px}
   .seg i.est{background:repeating-linear-gradient(135deg,#dcdce3 0 4px,#ececf1 4px 8px)}
+  /* ---- retention by group ---- */
+  .grp{border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.06);margin-bottom:10px;overflow:hidden}
+  .grp-head{display:flex;align-items:center;gap:10px;padding:13px 14px 11px}
+  .grp-head .icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:14px;flex:none}
+  .grp-head h4{margin:0;font-size:14px;font-weight:650;letter-spacing:-.01em}
+  .grp-head .sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .grp-head .chev{margin-left:auto;color:#c2c2c8;font-size:13px}
+  .pills{display:flex;gap:6px;padding:0 14px 13px}
+  .pills span{flex:1;text-align:center;font-size:12px;font-weight:600;padding:7px 0;border-radius:9px;
+              background:#f1f1f5;color:var(--muted)}
+  .pills span.on{background:#2f7bff;color:#fff}
+  .pills span.locked{background:#f7f7f9;color:#c2c2c8}
+  .grp-list{border-top:1px solid var(--hair);padding:4px 14px 10px}
+  .grp-list .m{display:flex;align-items:baseline;gap:8px;padding:7px 0;font-size:12px;border-bottom:1px solid var(--hair)}
+  .grp-list .m:last-child{border-bottom:0}
+  .grp-list .m b{font-weight:500;color:var(--ink)}
+  .grp-list .m .n{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .grp-list .m .tag{font-size:10px;padding:1px 6px;border-radius:5px;background:#f1f1f5;color:var(--muted)}
+  .grp-note{font-size:11px;color:var(--muted);line-height:1.5;padding:0 14px 12px;margin:0}
+  .totals{display:flex;gap:10px;margin:0 0 14px}
+  .totals div{flex:1;background:#fff;border-radius:12px;padding:11px 12px;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+  .totals b{display:block;font-size:19px;letter-spacing:-.01em}
+  .totals span{font-size:11px;color:var(--muted)}
   .phone.tall{height:auto}
   .phone.tall .screen{height:auto;overflow:visible;padding-bottom:40px}
   .loadcard{margin:0 0 12px}
@@ -820,6 +843,106 @@
   <div class="homebar"></div>
 </div>
 <div class="caption">ข้อเสนอ — รอยืนยันก่อนลงมือ</div>
+</div>
+
+
+<!-- ============ RETENTION BY GROUP ============ -->
+<div class="phone-wrap">
+<div class="phone tall">
+  <div class="statusbar"><span>9:41</span>
+    <span class="icons"><span class="bars"><i></i><i></i><i></i><i></i></span>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 10.5l2-2.2a2.9 2.9 0 00-4 0l2 2.2z" fill="#1c1c1e"/><path d="M3.6 5.6a6.5 6.5 0 018.8 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/><path d="M1 3a10 10 0 0114 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span class="batt"><b></b></span></span>
+  </div>
+  <div class="screen">
+    <div class="apphead"><h2>เก็บข้อมูลย้อนหลัง</h2></div>
+    <p class="fine" style="margin:0 0 14px">ตั้งแยกตามกลุ่มได้ เพราะแต่ละกลุ่มโตไม่เท่ากันและมีค่าไม่เท่ากัน — ข้อมูลดิบความถี่สูงโตวันละสองแสนเท่าของน้ำหนักตัว</p>
+
+    <div class="totals">
+      <div><b>134,182</b><span>เอกสารทั้งหมด</span></div>
+      <div><b>+2,400</b><span>ต่อวันโดยประมาณ</span></div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">
+        <span class="icon" style="background:#eaf1ff;color:#2f7bff">☾</span>
+        <div><h4>ฟื้นตัวและการนอน</h4><div class="sub">5 ชนิด · 32,775 เอกสาร · โตปีละ ~16,000</div></div>
+        <span class="chev">⌄</span>
+      </div>
+      <div class="pills"><span>1 ปี</span><span>2 ปี</span><span class="on">5 ปี</span><span>ไม่ลบ</span></div>
+      <div class="grp-list">
+        <div class="m"><b>การนอน</b><span class="tag">ดิบ</span><span class="n">24,249</span></div>
+        <div class="m"><b>HRV</b><span class="tag">ดิบ</span><span class="n">6,667</span></div>
+        <div class="m"><b>ชีพจรขณะพัก</b><span class="tag">ดิบ</span><span class="n">711</span></div>
+        <div class="m"><b>ชีพจรตอนเดิน</b><span class="tag">ดิบ</span><span class="n">676</span></div>
+        <div class="m"><b>อัตราหายใจ</b><span class="tag">ดิบ</span><span class="n">472</span></div>
+      </div>
+      <p class="grp-note">กลุ่มเดียวที่ย้อนกลับไปเก็บใหม่ไม่ได้ถ้าหายไป และเป็นฐานของคะแนนความพร้อมทั้งหมด แนะนำ 5 ปีขึ้นไป</p>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">
+        <span class="icon" style="background:#eefaf0;color:#1f9d55">⚖</span>
+        <div><h4>ร่างกายและความฟิต</h4><div class="sub">5 ชนิด · 232 เอกสาร · โตปีละ ~60</div></div>
+        <span class="chev">⌄</span>
+      </div>
+      <div class="pills"><span>1 ปี</span><span>2 ปี</span><span>5 ปี</span><span class="on">ไม่ลบ</span></div>
+      <div class="grp-list">
+        <div class="m"><b>น้ำหนัก</b><span class="n">63</span></div>
+        <div class="m"><b>BMI</b><span class="n">63</span></div>
+        <div class="m"><b>ไขมัน</b><span class="n">51</span></div>
+        <div class="m"><b>มวลไร้ไขมัน</b><span class="n">51</span></div>
+        <div class="m"><b>ส่วนสูง</b><span class="n">4</span></div>
+      </div>
+      <p class="grp-note">ทั้งกลุ่มเล็กกว่าชีพจรวันเดียว การลบไม่ได้ประหยัดอะไร แต่ทำให้ดูแนวโน้มข้ามปีไม่ได้</p>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">
+        <span class="icon" style="background:#fff3e8;color:#d9822b">🏃</span>
+        <div><h4>การซ้อมและกิจกรรม</h4><div class="sub">7 ชนิด · เก็บเป็นสรุปรายวัน/รายชั่วโมง</div></div>
+        <span class="chev">⌄</span>
+      </div>
+      <div class="pills"><span>1 ปี</span><span class="on">2 ปี</span><span>5 ปี</span><span>ไม่ลบ</span></div>
+      <div class="grp-list">
+        <div class="m"><b>ก้าว · แคลอรี · ระยะทาง</b><span class="tag">สรุปเท่านั้น</span><span class="n">365/ปี</span></div>
+        <div class="m"><b>นาทีออกกำลังกาย · ยืน</b><span class="tag">สรุปเท่านั้น</span><span class="n">365/ปี</span></div>
+        <div class="m"><b>ออกกำลังกาย (workout)</b><span class="n">95</span></div>
+      </div>
+      <p class="grp-note">ข้อมูลดิบของกลุ่มนี้ไม่ได้เก็บแล้ว เพราะสรุปรายวันให้คำตอบเดียวกันโดยใช้พื้นที่ 1 ใน 2,000</p>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">
+        <span class="icon" style="background:#feeceb;color:#d0352b">♡</span>
+        <div><h4>ข้อมูลดิบความถี่สูง</h4><div class="sub">4 ชนิด · 67,790 เอกสาร · โตวันละ ~500</div></div>
+        <span class="chev">⌄</span>
+      </div>
+      <div class="pills"><span class="on">7 วัน</span><span>14 วัน</span><span>30 วัน</span><span class="locked">ไม่ลบ</span></div>
+      <div class="grp-list">
+        <div class="m"><b>ความเร็ววิ่ง</b><span class="tag">ดิบ</span><span class="n">36,124</span></div>
+        <div class="m"><b>ชีพจร</b><span class="tag">ดิบ</span><span class="n">31,084</span></div>
+        <div class="m"><b>ความเร็วเดิน</b><span class="tag">ดิบ</span><span class="n">293</span></div>
+        <div class="m"><b>ความยาวก้าว</b><span class="tag">ดิบ</span><span class="n">289</span></div>
+      </div>
+      <p class="grp-note"><b>ช่วงที่ออกกำลังกายเก็บตามกลุ่มการซ้อมเสมอ ไม่ถูกลบตามหน้าต่างนี้</b> — หน้าต่างนี้คุมเฉพาะชีพจรระหว่างวันธรรมดา ซึ่งสรุปรายชั่วโมงเก็บแทนไว้แล้ว</p>
+    </div>
+
+    <div class="grp">
+      <div class="grp-head">
+        <span class="icon" style="background:#f3f0ff;color:#6b4bd8">⚑</span>
+        <div><h4>เหตุการณ์และอื่น ๆ</h4><div class="sub">1 ชนิด · 3 เอกสาร</div></div>
+        <span class="chev">⌄</span>
+      </div>
+      <div class="pills"><span>1 ปี</span><span>2 ปี</span><span class="on">5 ปี</span><span>ไม่ลบ</span></div>
+      <p class="grp-note">ชีพจรสูง/ต่ำผิดปกติ จังหวะหัวใจผิดปกติ การฝึกสติ — แทบไม่มีต้นทุน</p>
+    </div>
+
+    <p class="fine">การลดจำนวนปีจะลบข้อมูลเดิมที่เกินช่วงภายใน 24 ชั่วโมงและกู้คืนไม่ได้ · การเพิ่มจะยืดอายุของเดิมให้ด้วย · ระบบจะถามยืนยันก่อนทุกครั้งที่ลด</p>
+  </div>
+  <div class="homebar"></div>
+</div>
+<div class="caption">ตั้งค่า — เก็บข้อมูลแยกตามกลุ่ม</div>
 </div>
 
 <!-- ============ LOADING STATES ============ -->

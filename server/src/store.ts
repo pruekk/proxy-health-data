@@ -368,6 +368,7 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
   // minutes above time asleep and called it time in bed, which says nothing and implies a lot.
   const stages = (lastNight?.stagesMinutes ?? {}) as Record<string, number>
   const inBedMinutes = typeof stages.inBed === 'number' ? stages.inBed : undefined
+  const baseline = await sleepBaseline(uid)
 
   const hrvValues = sleepHrvNights.map(([, v]) => v.value)
   const hrv = useSleepHrv
@@ -387,12 +388,75 @@ export async function collectReadinessInputs(uid: string, baselineDays = 90): Pr
     restingHeartRate: latestAndBaseline('restingHeartRate'),
     sleepMinutes,
     inBedMinutes,
+    usualSleepMinutes: baseline?.asleepMinutes,
     load,
     wakeTime: lastNight?.wakeTime ? String(lastNight.wakeTime) : undefined,
   }
 }
 
 const readinessCol = (uid: string) => userRef(uid).collection('readiness')
+const baselinesCol = (uid: string) => userRef(uid).collection('baselines')
+
+/** Nights the sleep baseline is taken over. */
+const SLEEP_BASELINE_DAYS = 90
+/** Below this, "normal for you" is not a thing yet. */
+const SLEEP_BASELINE_MINIMUM_NIGHTS = 14
+
+export interface SleepBaseline {
+  nights: number
+  asleepMinutes: number
+  stagesMinutes: Record<string, number>
+  from: string
+  to: string
+  computedAt: string
+}
+
+/**
+ * What a normal night looks like for this user, as medians rather than means — one twelve-hour
+ * catch-up should not move the figure a coach compares tonight against.
+ *
+ * Ninety nights of stage samples is a few thousand documents, so the answer is computed once a
+ * local day and then read back. It is context, never a score: the sleep factor still measures
+ * against a target, because "normal for you" being six and a half hours is the problem, not the
+ * yardstick.
+ */
+export async function sleepBaseline(uid: string): Promise<SleepBaseline | undefined> {
+  const timeZone = String((await getProfile(uid)).timeZone ?? 'UTC')
+  const now = new Date()
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+  const ref = baselinesCol(uid).doc('sleep')
+
+  const stored = await ref.get()
+  if (stored.exists && stored.get('to') === today) return plain(stored.data()!) as unknown as SleepBaseline
+
+  const from = new Date(now.getTime() - SLEEP_BASELINE_DAYS * 86_400_000)
+  const nights = (await querySleep(uid, { from, to: now }, timeZone)).filter((n) => n.asleepMinutes > 0)
+  if (nights.length < SLEEP_BASELINE_MINIMUM_NIGHTS) return undefined
+
+  const stageKeys = new Set(nights.flatMap((n) => Object.keys(n.stagesMinutes)))
+  const baseline: SleepBaseline = {
+    nights: nights.length,
+    asleepMinutes: Math.round(medianOf(nights.map((n) => n.asleepMinutes))),
+    stagesMinutes: Object.fromEntries(
+      [...stageKeys].map((key) => [
+        key,
+        Math.round(medianOf(nights.map((n) => n.stagesMinutes[key] ?? 0).filter((v) => v > 0))),
+      ]),
+    ),
+    from: new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(from),
+    to: today,
+    computedAt: now.toISOString(),
+  }
+  await ref.set(baseline, { merge: true })
+  return baseline
+}
+
+function medianOf(values: number[]) {
+  if (!values.length) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2
+}
 
 /**
  * The day's readiness, computed once and then served from storage. The app and the MCP tools
@@ -742,7 +806,24 @@ export async function listMetrics(uid: string, types?: string[], withSources = f
       // deletions never decrement it. An aggregation query is exact and costs one read per
       // thousand documents.
       const count = withCounts ? (await samplesCol(uid, doc.id).count().get()).data().count : undefined
-      const base = { ...rest, type: doc.id, latest: resolved ?? null, ...(withCounts ? { count } : {}) }
+      // `firstAt` on the metric document is the oldest sample ever uploaded, and TTL deletions
+      // never move it: weight claimed to go back to 2018 while the oldest document held was from
+      // 2024. Anyone reading it would plan a trend over years of data that is gone.
+      const oldest = withCounts ? await oldestSample(uid, doc.id) : undefined
+      // `sampleCount` is a running total that never saw what was written before it existed and
+      // does not come down when retention deletes. Where the exact count is available it is the
+      // only one reported, so there are not two numbers disagreeing in the same response.
+      const { sampleCount, ...withoutCounter } = rest as DocumentData
+      const base = withCounts
+        ? {
+            ...withoutCounter,
+            type: doc.id,
+            latest: resolved ?? null,
+            count,
+            firstAt: oldest ?? null,
+            firstSyncedAt: (rest as DocumentData).firstAt ?? null,
+          }
+        : { ...rest, type: doc.id, latest: resolved ?? null }
       if (!withSources) return base
       const counts = sources as Record<string, number> | undefined
       return {
@@ -755,6 +836,13 @@ export async function listMetrics(uid: string, types?: string[], withSources = f
       }
     }),
   )
+}
+
+/** Oldest sample still held, as opposed to the oldest ever uploaded. */
+async function oldestSample(uid: string, type: string) {
+  const snap = await samplesCol(uid, type).orderBy('startDate').limit(1).get()
+  const at = snap.docs[0]?.get('startDate')
+  return at instanceof Timestamp ? at.toDate().toISOString() : undefined
 }
 
 async function legacyLatest(uid: string, type: string) {
