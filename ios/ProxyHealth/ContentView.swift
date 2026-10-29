@@ -31,6 +31,10 @@ struct ContentView: View {
                 // until the next pull-to-refresh.
                 dashboard.refreshLocalSyncs()
                 await dashboard.load(settings: model.settings, force: true)
+                // The watch is swept and topped up from here rather than from the calendar tab,
+                // so it stays in line with the plan whether or not that tab is ever opened.
+                await dashboard.loadPlan(settings: model.settings, month: .current)
+                await dashboard.syncWatch()
             }
         }
         .overlay(alignment: .top) {

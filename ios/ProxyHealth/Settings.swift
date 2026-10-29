@@ -89,6 +89,9 @@ enum SyncState {
     private static let recentSyncsKey = "sync.recent"
     private static let backgroundKey = "sync.backgroundDelivery"
     private static let chargingKey = "sync.onlyWhileCharging"
+    private static let watchExportKey = "watch.export"
+    private static let watchStartKey = "watch.startMinuteOfDay"
+    private static let watchSweptKey = "watch.sweptAt"
 
     static func anchor(for key: String) -> HKQueryAnchor? {
         guard let data = defaults.data(forKey: "anchor.\(key)") else { return nil }
@@ -108,6 +111,27 @@ enum SyncState {
     static var lastSyncAt: Date? {
         get { defaults.object(forKey: lastSyncKey) as? Date }
         set { defaults.set(newValue, forKey: lastSyncKey) }
+    }
+
+    /// Whether planned sessions are pushed to the watch. Off until the user turns it on, since
+    /// turning it on is what triggers the permission prompt.
+    static var watchExport: Bool {
+        get { defaults.bool(forKey: watchExportKey) }
+        set { defaults.set(newValue, forKey: watchExportKey) }
+    }
+
+    /// What time of day a scheduled session is put on the watch, as minutes from midnight. The
+    /// plan itself carries no time — the coach writes sessions, not appointments — so this is
+    /// seeded from the hour the user actually trains and can then be changed.
+    static var watchStartMinuteOfDay: Int {
+        get { defaults.object(forKey: watchStartKey) as? Int ?? 6 * 60 + 30 }
+        set { defaults.set(newValue, forKey: watchStartKey) }
+    }
+
+    /// When the watch was last brought in line with the plan, so the settings row can say so.
+    static var watchSweptAt: Date? {
+        get { defaults.object(forKey: watchSweptKey) as? Date }
+        set { defaults.set(newValue, forKey: watchSweptKey) }
     }
 
     /// Last characteristics upload, so unchanged values are not re-sent on every sync.

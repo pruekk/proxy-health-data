@@ -12,7 +12,7 @@ let package = Package(
     name: "ProxyHealthCore",
     platforms: [.macOS(.v14)],
     targets: [
-        .target(name: "ProxyHealthCore", path: "ProxyHealth/Core", sources: ["Trends.swift", "CardFormat.swift", "SyncProgress.swift"]),
+        .target(name: "ProxyHealthCore", path: "ProxyHealth/Core", sources: ["Trends.swift", "CardFormat.swift", "SyncProgress.swift", "WorkoutRecipe.swift"]),
         .testTarget(name: "ProxyHealthCoreTests", dependencies: ["ProxyHealthCore"], path: "CoreTests/ProxyHealthCoreTests"),
     ]
 )

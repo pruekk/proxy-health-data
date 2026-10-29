@@ -20,6 +20,11 @@ final class Dashboard {
     /// The month the calendar tab is showing. Fetched on its own because it moves with the
     /// month stepper rather than with the rest of the dashboard.
     var plan: PlanRangeDoc?
+    /// Dates currently sitting on the watch, so the calendar can say whether the next session
+    /// is there without asking the scheduler on every redraw.
+    var watchDates: [String] = []
+    var watchNote: String?
+    var isSendingToWatch = false
     /// Reports this device wrote, shown immediately so the history does not wait for the server
     /// to acknowledge a sync that already finished.
     var localSyncs: [SyncReport] = SyncState.recentSyncs
@@ -108,6 +113,32 @@ final class Dashboard {
         if let loaded: PlanRangeDoc = await optional(client, "v1/plan?from=\(month.from)&to=\(month.to)") {
             plan = loaded
         }
+    }
+
+    /// Brings the watch in line with the plan: sweeps what is done or past, then tops up to the
+    /// next few sessions. Safe to call on every sync — it is a no-op when nothing has moved.
+    func syncWatch(force: Bool = false) async {
+        guard let plan, SyncState.watchExport || force else { return }
+        isSendingToWatch = true
+        defer { isSendingToWatch = false }
+        let minute = SyncState.watchStartMinuteOfDay
+        let outcome = await WorkoutExport.reconcile(
+            plan: plan, zones: zones, startHour: minute / 60, startMinute: minute % 60
+        )
+        watchNote = outcome.unavailable
+        if outcome.unavailable == nil { SyncState.watchSweptAt = Date() }
+        watchDates = await WorkoutExport.scheduledDates()
+    }
+
+    /// Reads back what is on the watch without changing anything.
+    func refreshWatchDates() async {
+        watchDates = await WorkoutExport.scheduledDates()
+    }
+
+    func clearWatch() async {
+        await WorkoutExport.removeAll()
+        watchDates = []
+        SyncState.watchSweptAt = Date()
     }
 
     /// Picks up reports written by a sync that just finished.

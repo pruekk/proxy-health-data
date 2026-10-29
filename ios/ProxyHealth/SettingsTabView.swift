@@ -21,6 +21,7 @@ struct SettingsTabView: View {
                 connection
                 retention
                 automation
+                WatchSettingsSection()
                 rarely
                 about
             }

@@ -32,7 +32,11 @@ struct CalendarView: View {
         }
         .background(Brand.ground)
         .refreshable { await dashboard.loadPlan(settings: model.settings, month: month, force: true) }
-        .task(id: month.key) { await dashboard.loadPlan(settings: model.settings, month: month) }
+        .task(id: month.key) {
+            await dashboard.loadPlan(settings: model.settings, month: month)
+            await dashboard.syncWatch()
+            await dashboard.refreshWatchDates()
+        }
         .sheet(item: $selected) { day in
             PlanDaySheet(day: day, today: range?.today ?? "")
         }
@@ -132,6 +136,7 @@ struct CalendarView: View {
             SectionTitle(text: "ครั้งต่อไป", hint: PlanFormat.dayLabel(next.date))
             Card {
                 PlanPrescription(plan: plan)
+                WatchHandoffRow(day: next)
             }
         } else if range != nil {
             SectionTitle(text: "ครั้งต่อไป")
