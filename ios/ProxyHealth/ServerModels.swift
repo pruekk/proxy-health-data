@@ -315,3 +315,187 @@ struct ZonesDoc: Codable, Sendable {
         note: nil
     )
 }
+
+// MARK: Training plan
+
+/// A range of days from `/v1/plan`: what was intended, what was done, and how the two compare.
+/// The comparison is the server's — the app only draws it, so the calendar and the coach in the
+/// chat never disagree about whether a day was followed.
+struct PlanRangeDoc: Codable, Sendable {
+    var from: String
+    var to: String
+    /// The user's local date on the server, which is the only date allowed to be "today".
+    var today: String
+    var timeZone: String?
+    var days: [PlanDayDoc]
+}
+
+struct PlanDayDoc: Codable, Sendable, Identifiable {
+    var date: String
+    /// planned · done · different · missed · rest · unplanned · none
+    var outcome: String
+    /// Set when what was done went beyond what was planned.
+    var harder: Bool?
+    var plan: PlanDoc?
+    var actual: [PlanActualDoc]?
+
+    var id: String { date }
+    var state: PlanState { PlanState(rawValue: outcome) ?? .none }
+    var workouts: [PlanActualDoc] { actual ?? [] }
+}
+
+struct PlanDoc: Codable, Sendable {
+    struct Step: Codable, Sendable, Identifiable {
+        var phase: String
+        var minutes: Double?
+        var distanceKm: Double?
+        /// [fastest, slowest] seconds per kilometre.
+        var paceSecPerKm: [Int]?
+        var zone: Int?
+        var detail: String?
+
+        var id: String { "\(phase)-\(minutes ?? 0)-\(distanceKm ?? 0)-\(detail ?? "")" }
+
+        var phaseLabel: String {
+            switch phase {
+            case "warmup": "วอร์มอัพ"
+            case "main": "ช่วงหลัก"
+            case "recovery": "ช่วงพัก"
+            case "cooldown": "คูลดาวน์"
+            case "stretch": "ยืดเหยียด"
+            case "drill": "ดริล"
+            case "plyometrics": "พลัยโอเมตริก"
+            default: phase
+            }
+        }
+
+        /// "15 นาที", "2 กม." — the left column of the prescription.
+        var amountLabel: String {
+            if let minutes, minutes > 0 { return "\(minutes.formatted(0)) นาที" }
+            if let distanceKm, distanceKm > 0 { return "\(distanceKm.formatted(2)) กม." }
+            return "—"
+        }
+
+        /// "7:14–7:55 /กม." — a range, because a single target pace is a promise nobody keeps.
+        var paceLabel: String? {
+            guard let paceSecPerKm, paceSecPerKm.count == 2 else { return nil }
+            return "\(PlanFormat.pace(paceSecPerKm[0]))–\(PlanFormat.pace(paceSecPerKm[1])) /กม."
+        }
+    }
+
+    struct Reps: Codable, Sendable {
+        var count: Int
+        var workMinutes: Double?
+        var workDistanceKm: Double?
+        var restMinutes: Double?
+    }
+
+    var date: String
+    var type: String
+    var totalMinutes: Double?
+    var targetDistanceKm: Double?
+    var steps: [Step]?
+    var reps: Reps?
+    var note: String?
+
+    var kind: PlanKind { PlanKind(rawValue: type) ?? .cross }
+}
+
+struct PlanActualDoc: Codable, Sendable, Identifiable {
+    var id: String
+    var activityTypeName: String?
+    var startLocal: String?
+    var distanceKm: Double?
+    var minutes: Double?
+    var avgHeartRate: Double?
+    var maxHeartRate: Double?
+}
+
+/// The kinds of session the coach can prescribe. Names and colours live here so the calendar
+/// pill, the detail sheet and the "next up" card cannot drift apart.
+enum PlanKind: String, CaseIterable, Sendable {
+    case easy, marathon, threshold, interval, repetition, long, cross, rest
+
+    /// What fits in a 32pt pill.
+    var short: String {
+        switch self {
+        case .easy: "EASY"
+        case .marathon: "MAR"
+        case .threshold: "THR"
+        case .interval: "INT"
+        case .repetition: "REP"
+        case .long: "LONG"
+        case .cross: "ครอส"
+        case .rest: "พัก"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .easy: "วิ่งเบา"
+        case .marathon: "จังหวะมาราธอน"
+        case .threshold: "เทมโป"
+        case .interval: "อินเทอร์วัล"
+        case .repetition: "รีพีต"
+        case .long: "วิ่งยาว"
+        case .cross: "ครอสเทรนนิง"
+        case .rest: "พัก"
+        }
+    }
+
+    var purpose: String {
+        switch self {
+        case .easy: "สะสมระยะโดยไม่เพิ่มความล้า"
+        case .marathon: "ชินกับจังหวะที่จะใช้จริง"
+        case .threshold: "ยกเพดานที่ยังวิ่งสบายได้"
+        case .interval: "เพิ่ม VO₂max และความเร็วสูงสุด"
+        case .repetition: "ความเร็วและฟอร์มที่รอบขาสูง"
+        case .long: "ความทนทานและการใช้ไขมัน"
+        case .cross: "ออกแรงโดยไม่กระแทกขา"
+        case .rest: "ให้ร่างกายซ่อมตัวเอง"
+        }
+    }
+}
+
+enum PlanState: String, Sendable {
+    /// Still ahead: a plan exists and the day has not arrived.
+    case planned
+    /// The plan was followed.
+    case done
+    /// A session happened, but not the one planned.
+    case different
+    /// The day passed with a plan and nothing recorded.
+    case missed
+    /// Rest was planned and rest is what happened.
+    case rest
+    /// A session with no plan behind it.
+    case unplanned
+    /// Nothing planned, nothing done.
+    case none
+}
+
+enum PlanFormat {
+    /// 434 -> "7:14"
+    static func pace(_ secPerKm: Int) -> String {
+        String(format: "%d:%02d", secPerKm / 60, secPerKm % 60)
+    }
+
+    /// "พฤ 30 ต.ค.", or "วันพฤหัสบดี 30 ตุลาคม" when `long`.
+    static func dayLabel(_ date: String, long: Bool = false) -> String {
+        guard let parsed = day(date) else { return date }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "th_TH")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = long ? "EEEE d MMMM" : "EEE d MMM"
+        return formatter.string(from: parsed)
+    }
+
+    static func day(_ date: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: date)
+    }
+}

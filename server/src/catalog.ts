@@ -79,11 +79,11 @@ const groups = [
   {
     id: 'training' as const,
     name: 'การซ้อมและกิจกรรม',
-    summary: 'สรุปรายวัน · workout',
+    summary: 'สรุปรายวัน · workout · แผนซ้อม',
     unit: 'years' as const,
     options: [1, 2, 5, 10],
     default: 5,
-    note: 'สรุปรายวันและรายชั่วโมงทั้งหมดอยู่ในกลุ่มนี้ รวมถึงชีพจรและความเร็วช่วงที่ออกกำลังกาย',
+    note: 'สรุปรายวันและรายชั่วโมงทั้งหมดอยู่ในกลุ่มนี้ รวมถึงชีพจรและความเร็วช่วงที่ออกกำลังกาย และแผนซ้อมในปฏิทิน — แผนหมดอายุพร้อมกับ workout ที่ใช้เทียบ จะได้ไม่เหลือแผนที่เทียบกับอะไรไม่ได้',
   },
   {
     id: 'body' as const,
@@ -267,6 +267,14 @@ const heartRate = {
   ],
 }
 
+/** Training plans written by the coaching tools. */
+const plan = {
+  /** Beyond this there is no point: readiness and load move the plan every week anyway. */
+  maxDaysAhead: 60,
+  /** What the tool description tells the AI to aim for. */
+  suggestedDaysAhead: 14,
+}
+
 const body = {
   quantities,
   categories,
@@ -279,6 +287,7 @@ const body = {
   display,
   battery,
   retentionGroups: groups,
+  plan,
   load,
   heartRate,
   sync: {

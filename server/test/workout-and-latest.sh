@@ -87,7 +87,7 @@ check "unknown id rejected" "1" "$(call get_workout_detail '{"workoutId":"000000
 check "missing id rejected" "1" "$(call get_workout_detail '{}' | grep -ci 'required')"
 
 echo "4. nothing regressed"
-check "tool count" "13" "$(curl -s -X POST $B/mcp -H "$AUTH" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
+check "tool count" "15" "$(curl -s -X POST $B/mcp -H "$AUTH" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
 check "get_workouts still works" "1" "$(call get_workouts '{}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["count"])')"
 
 echo

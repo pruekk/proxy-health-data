@@ -53,7 +53,7 @@ check "access_token issued" "1" "$([ -n "$AT" ] && echo 1 || echo 0)"
 check "code is single-use" "400" "$(curl -s -o /dev/null -w '%{http_code}' -X POST $B/oauth/token -d "grant_type=authorization_code&code=$CODE&client_id=$CID&redirect_uri=$RU&code_verifier=$VERIFIER")"
 
 echo "5. using the token"
-check "tools/list with OAuth token" "13" "$(curl -s -X POST $B/mcp -H "authorization: Bearer $AT" -H 'content-type: application/json' \
+check "tools/list with OAuth token" "15" "$(curl -s -X POST $B/mcp -H "authorization: Bearer $AT" -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
 check "tools/call with OAuth token" "200" "$(curl -s -o /dev/null -w '%{http_code}' -X POST $B/mcp -H "authorization: Bearer $AT" -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_metrics","arguments":{}}}')"

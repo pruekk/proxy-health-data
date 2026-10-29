@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Three tabs under a floating bar: where things stand, what the app has been doing, and the
-/// settings you touch once in a while.
+/// Four tabs under a floating bar: where things stand, what the plan says, what the app has
+/// been doing, and the settings you touch once in a while.
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @State private var dashboard = Dashboard()
@@ -13,6 +13,7 @@ struct ContentView: View {
             Group {
                 switch tab {
                 case .latest: LatestView()
+                case .calendar: CalendarView()
                 case .history: HistoryView()
                 case .settings: SettingsTabView()
                 }

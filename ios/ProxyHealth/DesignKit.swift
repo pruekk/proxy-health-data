@@ -223,12 +223,13 @@ struct FloatingTabBar: View {
 }
 
 enum AppTab: String, CaseIterable, Identifiable {
-    case latest, history, settings
+    case latest, calendar, history, settings
 
     var id: String { rawValue }
     var title: String {
         switch self {
         case .latest: "ล่าสุด"
+        case .calendar: "ปฏิทิน"
         case .history: "ประวัติ"
         case .settings: "ตั้งค่า"
         }
@@ -236,6 +237,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .latest: "house.fill"
+        case .calendar: "calendar"
         case .history: "clock"
         case .settings: "gearshape"
         }

@@ -17,6 +17,9 @@ final class Dashboard {
     var readiness: ReadinessDoc?
     var battery: BatteryDoc?
     var zones: ZonesDoc?
+    /// The month the calendar tab is showing. Fetched on its own because it moves with the
+    /// month stepper rather than with the rest of the dashboard.
+    var plan: PlanRangeDoc?
     /// Reports this device wrote, shown immediately so the history does not wait for the server
     /// to acknowledge a sync that already finished.
     var localSyncs: [SyncReport] = SyncState.recentSyncs
@@ -94,6 +97,16 @@ final class Dashboard {
         } catch {
             failures.append("\(path.split(separator: "?")[0]): \(error.localizedDescription)")
             return nil
+        }
+    }
+
+    /// One month of plan and workouts. The calendar asks for exactly the month on screen, so
+    /// stepping back a year costs twelve small reads rather than one enormous one.
+    func loadPlan(settings: SyncSettings, month: PlanMonth, force: Bool = false) async {
+        guard let client = APIClient(settings: settings) else { return }
+        if !force, plan?.from == month.from { return }
+        if let loaded: PlanRangeDoc = await optional(client, "v1/plan?from=\(month.from)&to=\(month.to)") {
+            plan = loaded
         }
     }
 

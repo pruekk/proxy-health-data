@@ -14,6 +14,7 @@ import {
   collectBatteryInputs,
   deleteAllData,
   getProfile,
+  getPlanRange,
   getReadiness,
   heartRateZonesFor,
   getRetention,
@@ -118,6 +119,16 @@ export const app = new Elysia()
       .get('/battery', async ({ uid }) => computeBattery(await collectBatteryInputs(uid)))
       // Training zones, from the heart rate actually recorded rather than an age formula.
       .get('/zones', ({ uid }) => heartRateZonesFor(uid))
+      // The calendar. Read-only for the app: plans are written by the coaching tools, so there
+      // is one place where the rule about not rewriting the past lives.
+      .get(
+        '/plan',
+        async ({ uid, query }) => {
+          const keys = parseDateKeys(query.from, query.to, 35, await timeZoneOf(uid))
+          return getPlanRange(uid, keys.from, keys.to)
+        },
+        { query: RangeQuery },
+      )
       .get(
         '/hourly',
         async ({ uid, query }) => {

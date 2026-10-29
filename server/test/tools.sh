@@ -50,7 +50,7 @@ check "dateOfBirth stored" "1990-05-15" "$(echo "$ME" | python3 -c 'import sys,j
 check "biologicalSex stored" "male" "$(echo "$ME" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("biologicalSex"))')"
 
 echo "2. tools/list"
-check "tool count" "13" "$(curl -s -X POST $B/mcp -H "$AUTH" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
+check "tool count" "15" "$(curl -s -X POST $B/mcp -H "$AUTH" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["result"]["tools"]))')"
 
 echo "3. get_latest_values"
 LV=$(call get_latest_values '{"types":["bodyMass","height","vo2Max"]}')
@@ -548,6 +548,35 @@ tool = json.loads(subprocess.run(["curl","-s","-X","POST","'"$B"'/mcp","-H","'"$
   json.dumps({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_cardio_fitness","arguments":{}}})],
   capture_output=True,text=True).stdout)["result"]["content"][0]["text"]
 print(1 if json.loads(tool)["heartRate"]["max"] == route["max"] else 0)')"
+
+echo "28. the plan can be written forward and never backward"
+TOMORROW=$(python3 -c 'from datetime import date,timedelta;print(date.today()+timedelta(days=1))')
+YESTERDAY=$(python3 -c 'from datetime import date,timedelta;print(date.today()-timedelta(days=1))')
+P=$(call_est set_training_plan "{\"days\":[
+  {\"date\":\"$TOMORROW\",\"type\":\"easy\",\"totalMinutes\":65,\"steps\":[
+    {\"phase\":\"warmup\",\"minutes\":15},
+    {\"phase\":\"main\",\"minutes\":40,\"paceSecPerKm\":[434,475],\"zone\":2},
+    {\"phase\":\"cooldown\",\"minutes\":10}]},
+  {\"date\":\"$YESTERDAY\",\"type\":\"threshold\"}]}")
+check "tomorrow is written" "1" "$(echo "$P" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["written"]))')"
+check "yesterday is refused" "1" "$(echo "$P" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["refused"]))')"
+check "and the refusal says why" "1" "$(echo "$P" | python3 -c 'import sys,json;print(1 if "ย้อนหลัง" in json.load(sys.stdin)["refused"][0]["reason"] else 0)')"
+BAD=$(call_est set_training_plan "{\"days\":[{\"date\":\"$TOMORROW\",\"type\":\"sprints\"}]}")
+check "an unknown type is refused" "1" "$(echo "$BAD" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["refused"]))')"
+
+C=$(call_est get_training_plan "{\"from\":\"$YESTERDAY\",\"to\":\"$TOMORROW\"}")
+check "the calendar covers every day in the range" "3" "$(echo "$C" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["days"]))')"
+check "tomorrow reads as planned" "planned" "$(echo "$C" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)["days"]
+print(d[-1]["outcome"])')"
+check "the plan carries its steps" "3" "$(echo "$C" | python3 -c '
+import sys, json
+d = json.load(sys.stdin)["days"][-1]
+print(len(d["plan"]["steps"]))')"
+check "the app route agrees with the tool" "1" "$(curl -s "$B/v1/plan?from=$YESTERDAY&to=$TOMORROW" -H "$EST_AUTH" | python3 -c '
+import sys, json
+print(1 if json.load(sys.stdin)["days"][-1]["outcome"] == "planned" else 0)')"
 
 echo
 echo "passed: $pass  failed: $fail"

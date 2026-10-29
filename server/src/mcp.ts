@@ -10,6 +10,7 @@ import {
   BadRequest,
   collectBatteryInputs,
   dailySeries,
+  getPlanRange,
   getProfile,
   getReadiness,
   getWorkout,
@@ -21,6 +22,7 @@ import {
   querySamples,
   querySleep,
   queryWorkouts,
+  setPlans,
   sleepBaseline,
 } from './store'
 
@@ -495,6 +497,45 @@ const tools: Tool[] = [
         note: splits.length
           ? 'count is the number of samples found; series may be thinned to maxPoints. splits are per kilometre, pace in seconds per km, the last one usually partial.'
           : 'count is the number of samples found; series may be thinned to maxPoints. No splits: this workout has no raw distance samples, which is the case for sessions recorded before distance was collected per workout.',
+      }
+    },
+  },
+  {
+    name: 'get_training_plan',
+    title: 'Training plan and what came of it',
+    description:
+      'The calendar: every day in a range with the session planned for it, what was actually recorded, and `outcome` — planned, done, different, missed, rest, unplanned or none — decided server-side so the app and this tool never disagree. `harder` marks a session run faster than its target pace or above the zone it was written for. Use before planning, so a week is written against what the last one actually did. Plans are kept as long as the training data they are compared against — the `training` retention group, five years by default — so an old plan never outlives the workout that answers it.',
+    inputSchema: { type: 'object', properties: { ...dayRange } },
+    run: async (uid, args) => {
+      const keys = parseDateKeys(str(args.from), str(args.to), 14, await timeZoneOf(uid))
+      return getPlanRange(uid, keys.from, keys.to)
+    },
+  },
+  {
+    name: 'set_training_plan',
+    title: 'Write the training plan',
+    description:
+      'Writes planned sessions, one object per day. The past is a record and cannot be rewritten: a date before today is refused, and today is refused once a workout has been recorded on it. Each day takes `type` (easy, marathon, threshold, interval, repetition, long, cross, rest), optional `totalMinutes` and `targetDistanceKm`, `reps` for interval work, a `note`, and `steps` — each with `phase` (warmup, main, recovery, cooldown, stretch, drill, plyometrics), `minutes` or `distanceKm`, `paceSecPerKm` as a two-number range, and `zone`. Paces are yours to choose; nothing is derived here. Plan a week or two at a time and revisit — readiness and load move the plan anyway. What is written is kept for as long as the workouts it will be compared against (the `training` retention group), so a plan and its outcome always expire together. Days are accepted or refused individually, and every refusal says why.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        days: {
+          type: 'array',
+          description: 'One entry per day. Writing a day that already has a plan replaces it.',
+          items: { type: 'object' },
+        },
+      },
+      required: ['days'],
+    },
+    run: async (uid, args) => {
+      const days = Array.isArray(args.days) ? args.days : []
+      if (!days.length) throw new BadRequest('`days` is required — one object per day')
+      const result = await setPlans(uid, days, 'mcp')
+      return {
+        ...result,
+        note: result.refused.length
+          ? 'บางวันถูกปฏิเสธ ดูเหตุผลรายวันใน refused — วันที่ผ่านไปแล้วแก้ไม่ได้'
+          : undefined,
       }
     },
   },

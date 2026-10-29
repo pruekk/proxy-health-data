@@ -97,4 +97,10 @@ for pair in oauth:t-oauth tools:t-tools workout-and-latest:t-workout; do
   echo; echo "### $suite"
   TOKEN=${pair##*:} bash "$ROOT/test/$suite.sh" || fail=1
 done
+
+# A crash in the server shows up in a suite as unparseable JSON, which says nothing about why.
+if [ "$fail" -ne 0 ]; then
+  echo; echo "### server log (last 40 lines)"
+  tail -40 "$TMP/server.log"
+fi
 exit $fail

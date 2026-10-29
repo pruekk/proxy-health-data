@@ -14,6 +14,14 @@ import { computeBattery, groupSleep, type BatteryInputs } from './battery'
 import { heartRateZones } from './zones'
 import { loadWindows } from './load'
 import {
+  PlanRejected,
+  outcomeFor,
+  validateDay,
+  wentHarder,
+  type DayActual,
+  type PlanDay,
+} from './plans'
+import {
   aggregateWindow,
   usesRawWindow,
   defaults as retentionDefaults,
@@ -729,6 +737,140 @@ export async function collectBatteryInputs(uid: string): Promise<BatteryInputs> 
 
   return { days, hourNow: hourOf(now) }
 }
+
+const plansCol = (uid: string) => userRef(uid).collection('plans')
+
+/**
+ * Writes plan days, one at a time, so a batch reports per day rather than failing as a block —
+ * a coach writing a week should not lose Tuesday because Monday has already been run.
+ */
+export async function setPlans(uid: string, days: unknown[], client?: string) {
+  const timeZone = String((await getProfile(uid)).timeZone ?? 'UTC')
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date())
+  const retention = await getRetention(uid)
+
+  // Which days already carry a workout, since today closes once one does.
+  const dates = days.map((d) => String((d as { date?: unknown })?.date ?? ''))
+  const workoutDates = new Set(await datesWithWorkouts(uid, dates.filter(Boolean), timeZone))
+
+  const written: PlanDay[] = []
+  const refused: { date: string; reason: string }[] = []
+  const ops: Op[] = []
+
+  for (const day of days) {
+    const date = String((day as { date?: unknown })?.date ?? '')
+    try {
+      const plan = validateDay(day, today, workoutDates.has(date))
+      const ref = plansCol(uid).doc(plan.date)
+      const existing = await ref.get()
+      ops.push((b) =>
+        b.set(
+          ref,
+          {
+            ...plan,
+            source: 'mcp',
+            client: client ?? null,
+            revision: ((existing.get('revision') as number | undefined) ?? 0) + 1,
+            createdAt: existing.get('createdAt') ?? FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            expiresAt: retentionExpiry(retention, new Date(`${plan.date}T00:00:00Z`)),
+          },
+          { merge: true },
+        ),
+      )
+      written.push(plan)
+    } catch (error) {
+      refused.push({ date, reason: error instanceof PlanRejected ? error.message : 'ข้อมูลแผนไม่ถูกต้อง' })
+    }
+  }
+  if (ops.length) await commit(ops)
+  return { written, refused, today }
+}
+
+/** Local dates on which a workout is already recorded. */
+async function datesWithWorkouts(uid: string, dates: string[], timeZone: string) {
+  if (!dates.length) return []
+  const sorted = [...dates].sort()
+  const from = new Date(`${sorted[0]}T00:00:00Z`)
+  const to = new Date(new Date(`${sorted[sorted.length - 1]}T00:00:00Z`).getTime() + 2 * 86_400_000)
+  const workouts = await queryWorkouts(uid, { from, to }, 200)
+  const dayOf = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+  return workouts.map((w) => dayOf.format(new Date(String(w.startDate))))
+}
+
+/**
+ * The calendar: every day in the range with its plan, what was actually done, and what became
+ * of the two. The outcome is decided here rather than in the reader, so the app and the tools
+ * cannot draw different conclusions from the same day.
+ */
+export async function getPlanRange(uid: string, from: string, to: string) {
+  const timeZone = String((await getProfile(uid)).timeZone ?? 'UTC')
+  const dayOf = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+  const today = dayOf.format(new Date())
+
+  const [plans, workouts, zones] = await Promise.all([
+    plansCol(uid).where(FieldPath.documentId(), '>=', from).where(FieldPath.documentId(), '<=', to).get(),
+    queryWorkouts(
+      uid,
+      { from: new Date(`${from}T00:00:00Z`), to: new Date(new Date(`${to}T00:00:00Z`).getTime() + 2 * 86_400_000) },
+      300,
+      undefined,
+      timeZone,
+    ),
+    heartRateZonesFor(uid).catch(() => undefined),
+  ])
+
+  const planByDate = new Map(plans.docs.map((d) => [d.id, plain(d.data()) as unknown as PlanDay]))
+  const actualByDate = new Map<string, DocumentData[]>()
+  for (const workout of workouts) {
+    const date = dayOf.format(new Date(String(workout.startDate)))
+    actualByDate.set(date, [...(actualByDate.get(date) ?? []), workout])
+  }
+
+  const days: DocumentData[] = []
+  for (let date = from; date <= to; date = shiftDay(date, 1)) {
+    const plan = planByDate.get(date)
+    const actuals = actualByDate.get(date) ?? []
+    const summarised: DayActual[] = actuals.map((w) => ({
+      activityTypeName: String(w.activityTypeName ?? ''),
+      avgHeartRate: typeof w.avgHeartRate === 'number' ? w.avgHeartRate : undefined,
+      paceSecPerKm:
+        typeof w.distanceM === 'number' && w.distanceM > 0 && typeof w.durationSec === 'number'
+          ? Math.round(w.durationSec / (w.distanceM / 1000))
+          : undefined,
+    }))
+    const { outcome } = outcomeFor({ date, today, plan, actuals: summarised })
+    const ceiling = zoneCeilingFor(zones, plan)
+    days.push({
+      date,
+      outcome,
+      harder: wentHarder(plan, summarised, ceiling),
+      plan: plan ?? null,
+      actual: actuals.map((w) => ({
+        id: w.id,
+        activityTypeName: w.activityTypeName,
+        startLocal: w.startLocal,
+        distanceKm: typeof w.distanceM === 'number' ? Number((w.distanceM / 1000).toFixed(2)) : undefined,
+        minutes: typeof w.durationSec === 'number' ? Math.round(w.durationSec / 60) : undefined,
+        avgHeartRate: w.avgHeartRate,
+        maxHeartRate: w.maxHeartRate,
+      })),
+    })
+  }
+  return { from, to, today, timeZone, days }
+}
+
+/** Top of the zone a session was written for, so "harder than planned" has a number to test. */
+function zoneCeilingFor(zones: DocumentData | undefined, plan: PlanDay | undefined) {
+  const target = plan?.steps?.reduce((max, s) => Math.max(max, s.zone ?? 0), 0)
+  if (!target || !zones) return undefined
+  const list = (zones.zones ?? []) as { zone: number; to: number }[]
+  return list.find((z) => z.zone === target)?.to
+}
+
+const shiftDay = (date: string, days: number) =>
+  new Date(new Date(`${date}T00:00:00Z`).getTime() + days * 86_400_000).toISOString().slice(0, 10)
 
 // ---------- retention backfill ----------
 
