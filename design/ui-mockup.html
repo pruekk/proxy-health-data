@@ -315,6 +315,21 @@
   .pill.plan{background:transparent;border:1.3px dashed currentColor;line-height:11px}
   .pill.rest{background:#dcdce2;color:#7b7b84}
   .dot{display:block;width:5px;height:5px;border-radius:50%;background:#d0352b;margin:3px auto 0}
+  /* A plan that was not carried out stays on the day, faded and struck through: turning it
+     into a rest day would erase what was intended, which is the only thing that makes the
+     record worth keeping. */
+  .pill.missed{background:transparent;border:1.3px dashed #c7c7cc;color:#b0b0b5;line-height:11px;
+               text-decoration:line-through}
+  .pill.swap{position:relative}
+  .pill.swap::after{content:"≠";position:absolute;right:-6px;top:-5px;font-size:9px;color:#8a6b14;
+                    background:#fff;border-radius:50%;width:11px;height:11px;line-height:11px}
+  .rx{margin-top:10px}
+  .rx .step{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--hair)}
+  .rx .step:last-child{border-bottom:0}
+  .rx .when{width:74px;flex:none;font-size:11.5px;color:var(--muted);font-weight:600}
+  .rx .what{font-size:12.5px;line-height:1.5}
+  .rx .what b{font-weight:600}
+  .rx .what span{display:block;color:var(--muted);font-size:11.5px;margin-top:1px}
   .legend2{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:14px}
   .legend2 span{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted)}
   .legend2 i{width:14px;height:9px;border-radius:5px;display:inline-block}
@@ -604,11 +619,11 @@
         <div class="day"><div class="num">10</div><span class="pill" style="background:#e0453a">INT</span><span class="dot"></span></div>
         <div class="day"><div class="num">11</div><span class="pill rest">พัก</span></div>
         <div class="day"><div class="num">12</div><span class="pill" style="background:#2f7bff">LONG</span></div>
-        <div class="day"><div class="num">13</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">13</div><span class="pill missed" style="color:#6cbf3a">EASY</span></div>
         <div class="day"><div class="num">14</div><span class="pill" style="background:#2bb3a3">ปีนผา</span></div>
         <div class="day"><div class="num">15</div><span class="pill" style="background:#6cbf3a">EASY</span></div>
         <div class="day"><div class="num">16</div><span class="pill rest">พัก</span></div>
-        <div class="day"><div class="num">17</div><span class="pill" style="background:#e8853d">THR</span></div>
+        <div class="day"><div class="num">17</div><span class="pill swap" style="background:#6cbf3a">EASY</span></div>
         <div class="day"><div class="num">18</div><span class="pill rest">พัก</span></div>
         <div class="day"><div class="num">19</div><span class="pill" style="background:#2f7bff">LONG</span></div>
         <div class="day"><div class="num">20</div><span class="pill rest">พัก</span></div>
@@ -635,16 +650,29 @@
       <span><i style="background:#2bb3a3"></i>ปีนผา/อื่น ๆ</span>
       <span><i style="background:#dcdce2"></i>พัก</span>
       <span><i style="border:1.3px dashed #8a8a8e;background:transparent"></i>แผน</span>
+      <span><i style="border:1.3px dashed #c7c7cc;background:transparent"></i>ไม่ได้ทำ</span>
+      <span><i style="background:#6cbf3a;position:relative">≠</i>ทำคนละแบบกับแผน</span>
       <span><i style="width:7px;height:7px;border-radius:50%;background:#d0352b"></i>หนักกว่าแผน</span>
     </div>
 
-    <h3 class="sec">สัปดาห์นี้ <span class="hint">26 ต.ค. – 1 พ.ย.</span></h3>
+    <h3 class="sec">ครั้งต่อไป <span class="hint">พฤหัส 30 ต.ค.</span></h3>
     <div class="card">
-      <div class="row"><div class="txt"><b>วิ่ง 3 ครั้ง · 21.4 กม.</b><span>ทำไปแล้ว 2 ครั้ง · 16.0 กม.</span></div><div class="end">76%</div></div>
-      <div class="row"><div class="txt"><b>รอบคุณภาพ 1 ครั้ง</b><span>threshold · ศุกร์ 31 ต.ค.</span></div><div class="end">แผน</div></div>
-      <div class="row"><div class="txt"><b>ปีนผา 2 ครั้ง</b><span>พฤหัส · อาทิตย์</span></div><div class="end">1/2</div></div>
+      <div class="rhead">
+        <span class="label" style="color:#3d6b28">EASY · วิ่งเบา</span>
+        <span class="stamp">รวม 65 นาที · ราว 6 กม.</span>
+      </div>
+      <div class="rx">
+        <div class="step"><span class="when">15 นาที</span>
+          <span class="what"><b>วอร์มอัพ</b><span>จ๊อกเบา + dynamic · จบด้วย strides 2×10 วินาที</span></span></div>
+        <div class="step"><span class="when">40 นาที</span>
+          <span class="what"><b>ช่วงหลัก · 7:14–7:55 /กม.</b><span>โซน 2 · ชีพจร 124–137 · คุยเป็นประโยคได้ตลอด</span></span></div>
+        <div class="step"><span class="when">10 นาที</span>
+          <span class="what"><b>คูลดาวน์</b><span>จ๊อกเบาจนชีพจรต่ำกว่า 120</span></span></div>
+        <div class="step"><span class="when">หลังจบ</span>
+          <span class="what"><b>ยืดเหยียด 15 นาที</b><span>น่อง ต้นขาหลัง สะโพก</span></span></div>
+      </div>
+      <p class="fine">อากาศร้อนชื้นดันชีพจรขึ้นได้ 5–15 ครั้ง/นาที — ถ้าเกินโซน 2 ทั้งที่วิ่งช้ามาก ให้ยึดความรู้สึกแทน pace</p>
     </div>
-    <p class="fine">แผนมาจากการคุยกับโค้ชใน Claude — เพิ่มหรือแก้ได้เฉพาะวันนี้เป็นต้นไป วันที่ผ่านมาแล้วเป็นบันทึก ไม่ใช่แผน จึงแก้ไม่ได้</p>
   </div>
 
   <div class="screen hidden" data-tab="history">
@@ -1108,7 +1136,17 @@
     <div class="grabber"></div>
     <div class="sheet-body">
       <h2 style="margin-bottom:2px">เสาร์ 24 ต.ค.</h2>
-      <p class="lede" style="margin-top:0">แผน: <b>interval</b> 4 เซ็ต × 2 นาที · pace 7:05–7:15</p>
+      <p class="lede" style="margin-top:0"><b style="color:#9c3b33">INTERVAL</b> · เพิ่ม VO₂max และความเร็วสูงสุด</p>
+
+      <div class="label" style="margin-top:18px">แผนของวันนั้น</div>
+      <div class="rx">
+        <div class="step"><span class="when">15 นาที</span>
+          <span class="what"><b>วอร์มอัพ</b><span>จ๊อกเบา HR ไม่เกิน 150 + strides 2×10 วินาที</span></span></div>
+        <div class="step"><span class="when">4 เซ็ต</span>
+          <span class="what"><b>วิ่ง 2 นาที · 7:05–7:15 /กม.</b><span>พักเดิน 2 นาที · ความรู้สึก 6–7 จาก 10 · ราว 280 ม./เซ็ต</span></span></div>
+        <div class="step"><span class="when">10 นาที</span>
+          <span class="what"><b>คูลดาวน์</b><span>จนชีพจรต่ำกว่า 120 แล้วยืด</span></span></div>
+      </div>
 
       <div class="label" style="margin-top:20px">ที่ทำจริง</div>
       <div class="card" style="margin-top:8px">
