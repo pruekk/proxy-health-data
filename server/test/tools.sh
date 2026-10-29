@@ -364,6 +364,22 @@ check "exercise minutes survive" "42" "$(echo "$DAY" | python3 -c 'import sys,js
 check "the rings landed too" "700" "$(echo "$DAY" | python3 -c 'import sys,json;print(json.load(sys.stdin)[0]["activity"]["activeEnergyKcal"])')"
 
 echo "19. readiness is computed once a day and then frozen"
+# The lock needs all three measured factors, or it waits until midday — which made this test
+# pass in the afternoon and fail in the morning. Give this user a night so it locks either way.
+python3 - "$B" "$TOKEN" <<'PY2'
+import json, sys, urllib.request
+from datetime import datetime, timedelta, timezone
+base, token = sys.argv[1], sys.argv[2]
+now = datetime.now(timezone.utc)
+start = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=2)
+req = urllib.request.Request(base + "/v1/sync", data=json.dumps({"timeZone": "UTC", "samples": [
+    {"id": "frozen-night-0000-0000-00000000000f", "type": "sleepAnalysis", "kind": "category",
+     "value": 3, "valueLabel": "asleepCore", "startDate": start.isoformat(),
+     "endDate": (start + timedelta(minutes=420)).isoformat()}]}).encode(),
+    headers={"content-type": "application/json", "authorization": "Bearer " + token})
+urllib.request.urlopen(req)
+print("  seeded last night so every measured factor is present")
+PY2
 R1=$(curl -s $B/v1/readiness -H "$AUTH")
 check "locked once the measured factors are in" "True" "$(echo "$R1" | python3 -c 'import sys,json;print(json.load(sys.stdin)["locked"])')"
 check "carries the time it was computed" "1" "$(echo "$R1" | python3 -c 'import sys,json;print(1 if json.load(sys.stdin).get("computedAt") else 0)')"
@@ -517,6 +533,21 @@ check "sleep carries a personal baseline" "1" "$(echo "$S" | python3 -c 'import 
 check "the baseline is in minutes of sleep" "1" "$(echo "$S" | python3 -c 'import sys,json;b=json.load(sys.stdin)["baseline"];print(1 if 200 < b["asleepMinutes"] < 700 else 0)')"
 R=$(call_est get_training_readiness '{}')
 check "readiness names the user own normal" "1" "$(echo "$R" | python3 -c 'import sys,json;f=[x for x in json.load(sys.stdin)["factors"] if x["key"]=="sleep"];print(1 if f and "ปกติของคุณ" in (f[0].get("note") or "") else 0)')"
+
+echo "27. zones are served to the app as well as the tools"
+Z=$(curl -s $B/v1/zones -H "$EST_AUTH")
+check "five zones" "5" "$(echo "$Z" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["zones"]))')"
+check "they tile without gaps" "1" "$(echo "$Z" | python3 -c '
+import sys, json
+z = json.load(sys.stdin)["zones"]
+print(1 if all(z[i]["to"] == z[i+1]["from"] for i in range(len(z)-1)) else 0)')"
+check "and the tool agrees with the route" "1" "$(python3 -c '
+import json, subprocess, sys
+route = json.loads(subprocess.run(["curl","-s","'"$B"'/v1/zones","-H","'"$EST_AUTH"'"],capture_output=True,text=True).stdout)
+tool = json.loads(subprocess.run(["curl","-s","-X","POST","'"$B"'/mcp","-H","'"$EST_AUTH"'","-H","content-type: application/json","-d",
+  json.dumps({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_cardio_fitness","arguments":{}}})],
+  capture_output=True,text=True).stdout)["result"]["content"][0]["text"]
+print(1 if json.loads(tool)["heartRate"]["max"] == route["max"] else 0)')"
 
 echo
 echo "passed: $pass  failed: $fail"

@@ -15,6 +15,7 @@ import {
   deleteAllData,
   getProfile,
   getReadiness,
+  heartRateZonesFor,
   getRetention,
   ingest,
   listMetrics,
@@ -115,6 +116,8 @@ export const app = new Elysia()
       .get('/readiness', ({ uid }) => getReadiness(uid))
       // How much is left right now, as opposed to how recovered the morning started.
       .get('/battery', async ({ uid }) => computeBattery(await collectBatteryInputs(uid)))
+      // Training zones, from the heart rate actually recorded rather than an age formula.
+      .get('/zones', ({ uid }) => heartRateZonesFor(uid))
       .get(
         '/hourly',
         async ({ uid, query }) => {

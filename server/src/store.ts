@@ -11,6 +11,7 @@ import type {
 } from './schemas'
 import { catalog } from './catalog'
 import { computeBattery, groupSleep, type BatteryInputs } from './battery'
+import { heartRateZones } from './zones'
 import { loadWindows } from './load'
 import {
   aggregateWindow,
@@ -458,6 +459,60 @@ export async function sleepBaseline(uid: string): Promise<SleepBaseline | undefi
   }
   await ref.set(baseline, { merge: true })
   return baseline
+}
+
+/**
+ * Heart-rate zones for this user, cached for the day.
+ *
+ * It costs a year of workouts and a month of resting pulse to work out, and the answer changes
+ * about as often as a personal best — so it is computed once a local day and read back, the
+ * same way the sleep baseline is.
+ */
+export async function heartRateZonesFor(uid: string) {
+  const profile = await getProfile(uid)
+  const timeZone = String(profile.timeZone ?? 'UTC')
+  const now = new Date()
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+  const ref = baselinesCol(uid).doc('heartRateZones')
+
+  const stored = await ref.get()
+  if (stored.exists && stored.get('to') === today) return plain(stored.data()!)
+
+  const from = new Date(now.getTime() - 365 * 86_400_000)
+  const [workouts, series] = await Promise.all([
+    queryWorkouts(uid, { from, to: now }, 400, undefined, timeZone),
+    dailySeries(uid, new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+      .format(new Date(now.getTime() - catalog.heartRate.restingMedianDays * 86_400_000)), today, ['restingHeartRate']),
+  ])
+
+  const observed = workouts
+    .map((w) => ({ value: w.maxHeartRate as number | undefined, at: String(w.startLocal ?? w.startDate ?? '').slice(0, 10) }))
+    .filter((w): w is { value: number; at: string } => typeof w.value === 'number')
+    .map((w) => ({ value: Math.round(w.value), at: w.at }))
+  const resting = (series.restingHeartRate ?? [])
+    .map((p) => p.avg)
+    .filter((v): v is number => typeof v === 'number')
+
+  const zones = {
+    ...heartRateZones({
+      observed,
+      restingHeartRate: resting.length ? Math.round(medianOf(resting)) : undefined,
+      age: ageFromDateOfBirth(profile.dateOfBirth),
+    }),
+    to: today,
+    computedAt: now.toISOString(),
+  }
+  await ref.set(zones, { merge: true })
+  return plain(zones as DocumentData)
+}
+
+/** Whole years, from a stored ISO date of birth. */
+function ageFromDateOfBirth(dateOfBirth: unknown) {
+  if (typeof dateOfBirth !== 'string') return undefined
+  const born = new Date(dateOfBirth)
+  if (Number.isNaN(born.getTime())) return undefined
+  const years = (Date.now() - born.getTime()) / (365.25 * 86_400_000)
+  return years > 0 && years < 120 ? Math.floor(years) : undefined
 }
 
 function medianOf(values: number[]) {

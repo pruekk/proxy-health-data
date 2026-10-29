@@ -36,6 +36,20 @@ describe('heart-rate zones', () => {
     expect(result.source).toBe('estimated')
     expect(result.max).toBe(estimatedMaxFor(28))
     expect(result.note).toContain('±10')
+    // The highest reading is still reported: the zones refuse it, a VO2 estimate may want it.
+    expect(result.observedMax).toBe(150)
+  })
+
+  test('reports the highest reading separately from the number the zones use', () => {
+    const spiked = [{ value: 214, at: '2026-05-02' }, ...observed]
+    const result = heartRateZones({ observed: spiked, restingHeartRate: 59, age: 28 })
+    // The zones step over the uncorroborated spike; the plain highest is still answerable.
+    expect(result.max).toBe(187)
+    expect(result.observedMax).toBe(214)
+  })
+
+  test('with nothing recorded there is no observed peak to report', () => {
+    expect(heartRateZones({ age: 28 }).observedMax).toBeNull()
   })
 
   test('without a resting pulse the zones are plain percentages of maximum', () => {

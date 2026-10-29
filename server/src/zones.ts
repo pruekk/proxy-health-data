@@ -55,6 +55,11 @@ export function heartRateZones(inputs: ZoneInputs) {
   return {
     max,
     source: measured ? ('measured' as const) : ('estimated' as const),
+    /** The highest rate ever recorded, plainly. The zones above deliberately refuse it until a
+     *  second reading corroborates it and enough workouts exist, because a wrong maximum moves
+     *  every boundary — but a caller asking "what is the highest we have seen" wants the answer
+     *  to that question, not to a different and more cautious one. */
+    observedMax: observed.length ? Math.max(...observed.map((o) => o.value)) : null,
     measuredAt: measured?.at,
     workoutsConsidered: observed.length,
     estimatedFromAge: estimated ?? null,

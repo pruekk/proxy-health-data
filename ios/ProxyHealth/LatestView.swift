@@ -24,6 +24,7 @@ struct LatestView: View {
                 }
                 rings
                 todayTiles
+                zonesCard
                 heart
                 fitness
                 workouts
@@ -171,6 +172,14 @@ struct LatestView: View {
         }
         return MetricRow(symbol: item.symbol ?? "circle.dashed", title: item.name, subtitle: subtitle,
                          value: item.unit.map { "\(value) \($0)" } ?? value, detail: detail, detailStyle: style)
+    }
+
+    @ViewBuilder private var zonesCard: some View {
+        if let zones = dashboard.zones, !zones.zones.isEmpty {
+            HeartRateZonesCard(zones: zones)
+        } else if dashboard.isLoading || dashboard.loadedAt == nil {
+            HeartRateZonesCard(zones: .placeholder, placeholder: true).redacted(reason: .placeholder)
+        }
     }
 
     /// Two tiles per line, in catalog order.

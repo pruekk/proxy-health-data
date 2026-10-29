@@ -4,7 +4,6 @@
 import { catalog } from './catalog'
 import { paceLabel, splitsFromDistance } from './splits'
 import { daysBetween } from './load'
-import { heartRateZones } from './zones'
 import { parseDateKeys, parseRange } from './dates'
 import { computeBattery } from './battery'
 import {
@@ -14,6 +13,7 @@ import {
   getProfile,
   getReadiness,
   getWorkout,
+  heartRateZonesFor,
   latestDailyValues,
   listMetrics,
   queryDaily,
@@ -529,24 +529,8 @@ const tools: Tool[] = [
       const age = ageFrom(profile.dateOfBirth)
 
       // The zones every pace and effort cap rests on, from the heart rate the watch has actually
-      // recorded rather than an age formula re-guessed in each conversation.
-      const timeZone = String(profile.timeZone ?? 'UTC')
-      const recent = await queryWorkouts(uid, parseRange(undefined, undefined, 365), 400, undefined, timeZone)
-      const withMax = recent
-        .map((w) => ({ value: w.maxHeartRate as number | undefined, at: String(w.startLocal ?? w.startDate ?? '').slice(0, 10) }))
-        .filter((w): w is { value: number; at: string } => typeof w.value === 'number')
-        .sort((a, b) => b.value - a.value)
-      const restingSeries = (series.restingHeartRate ?? []) as DocumentDataLike[]
-      const restingValues = restingSeries
-        .slice(-catalog.heartRate.restingMedianDays)
-        .map((p) => p.avg)
-        .filter((v): v is number => typeof v === 'number')
-        .sort((a, b) => a - b)
-      const zones = heartRateZones({
-        observed: withMax.map((w) => ({ value: Math.round(w.value), at: w.at })),
-        restingHeartRate: restingValues.length ? Math.round(restingValues[Math.floor(restingValues.length / 2)]!) : undefined,
-        age,
-      })
+      // recorded rather than an age formula re-guessed in each conversation. Cached for the day.
+      const zones = await heartRateZonesFor(uid)
 
       // Apple only emits VO2 max after a qualifying outdoor workout, and stops altogether when
       // the Health profile is missing height or date of birth. Fall back to an estimate so the
@@ -554,7 +538,8 @@ const tools: Tool[] = [
       let estimate: ReturnType<typeof estimateVo2Max> = null
       if (measured === undefined) {
         const restingHr = (series.restingHeartRate ?? []).at(-1)?.avg as number | undefined
-        estimate = estimateVo2Max(restingHr, withMax[0]?.value, age)
+        const observed = zones.observedMax
+        estimate = estimateVo2Max(restingHr, typeof observed === 'number' ? observed : undefined, age)
       }
       const current = measured ?? estimate?.value
 

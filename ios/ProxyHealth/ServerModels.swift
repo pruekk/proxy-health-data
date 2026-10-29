@@ -286,3 +286,32 @@ enum ReadinessCache {
         return decoder
     }()
 }
+
+
+/// Training zones, worked out server-side from the heart rate the watch has actually recorded.
+struct ZonesDoc: Codable, Sendable {
+    struct Zone: Codable, Sendable, Identifiable {
+        var zone: Int
+        var name: String
+        var from: Int
+        var to: Int
+
+        var id: Int { zone }
+    }
+
+    var max: Int?
+    /// `measured` or `estimated` — whether the maximum came from a workout or an age formula.
+    var source: String?
+    var measuredAt: String?
+    var restingHeartRate: Int?
+    var method: String?
+    var zones: [Zone]
+    var note: String?
+
+    /// Shown redacted while the first load is in flight.
+    static let placeholder = ZonesDoc(
+        max: 190, source: nil, measuredAt: nil, restingHeartRate: 60, method: nil,
+        zones: (1...5).map { Zone(zone: $0, name: " ", from: 100 + $0 * 10, to: 110 + $0 * 10) },
+        note: nil
+    )
+}

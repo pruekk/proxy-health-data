@@ -16,6 +16,7 @@ final class Dashboard {
     var retentionGroups: [RetentionGroup] = []
     var readiness: ReadinessDoc?
     var battery: BatteryDoc?
+    var zones: ZonesDoc?
     /// Reports this device wrote, shown immediately so the history does not wait for the server
     /// to acknowledge a sync that already finished.
     var localSyncs: [SyncReport] = SyncState.recentSyncs
@@ -58,6 +59,7 @@ final class Dashboard {
         let cachedReadiness = ReadinessCache.today()
         async let readiness: ReadinessDoc? = cachedReadiness == nil ? optional(client, "v1/readiness") : nil
         async let battery: BatteryDoc? = optional(client, "v1/battery")
+        async let zones: ZonesDoc? = optional(client, "v1/zones")
 
         if let metrics = await metrics {
             self.metrics = Dictionary(uniqueKeysWithValues: metrics.map { ($0.type, $0) })
@@ -79,6 +81,7 @@ final class Dashboard {
             if readiness.locked == true { ReadinessCache.save(readiness) }
         }
         if let battery = await battery { self.battery = battery }
+        if let zones = await zones { self.zones = zones }
         self.error = failures.isEmpty ? nil : failures.joined(separator: " · ")
         self.loadedAt = Date()
     }

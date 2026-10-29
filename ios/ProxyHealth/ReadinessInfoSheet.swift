@@ -3,7 +3,7 @@ import SwiftUI
 /// What the readiness score is made of. Lives behind the ⓘ rather than on the card, but the
 /// caveat matters: a score of 53 means nothing next to someone else's 53.
 struct ReadinessInfoSheet: View {
-    enum Section { case readiness, battery }
+    enum Section { case readiness, battery, zones }
 
     var section: Section = .readiness
     @Environment(\.dismiss) private var dismiss
@@ -57,14 +57,56 @@ struct ReadinessInfoSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if section == .battery { batteryContent } else { readinessContent }
+                    switch section {
+                    case .battery: batteryContent
+                    case .zones: zonesContent
+                    case .readiness: readinessContent
+                    }
                 }
                 .padding(.horizontal, 22)
                 .padding(.bottom, 40)
             }
-            .navigationTitle(section == .battery ? "วิธีคำนวณพลังงานร่างกาย" : "วิธีคำนวณความพร้อมซ้อม")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("เสร็จ") { dismiss() } } }
+        }
+    }
+
+    private var title: String {
+        switch section {
+        case .battery: "วิธีคำนวณพลังงานร่างกาย"
+        case .zones: "โซนหัวใจคิดจากอะไร"
+        case .readiness: "วิธีคำนวณความพร้อมซ้อม"
+        }
+    }
+
+    private var zonesContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("โซนคิดจากชีพจรสูงสุดที่วัดได้จริงในการออกกำลังกาย ไม่ใช่สูตรจากอายุ ซึ่งคลาดเคลื่อนได้ถึง ±10 ครั้ง/นาที")
+                .font(.system(size: 13.5)).lineSpacing(3).foregroundStyle(.secondary)
+
+            section("คิดยังไง")
+            VStack(alignment: .leading, spacing: 9) {
+                formulaRow("ชีพจรสูงสุด", "ค่าสูงสุดที่วัดได้ในรอบปี และต้องมีค่าที่สองยืนยันในระยะ 6 ครั้ง/นาที กันค่าที่นาฬิกาอ่านเพี้ยน")
+                formulaRow("ชีพจรพัก", "ค่ากลาง 30 วันล่าสุด")
+                formulaRow("แบ่งโซน", "ตามสัดส่วนของช่วงระหว่างชีพจรพักถึงสูงสุด (heart rate reserve) ไม่ใช่สัดส่วนของค่าสูงสุดเฉย ๆ")
+            }
+
+            section("แต่ละโซนใช้ทำอะไร")
+            VStack(alignment: .leading, spacing: 7) {
+                bullet("โซน 1 ฟื้นตัว — เดินเร็วหรือจ๊อกเบามาก")
+                bullet("โซน 2 เบา — รอบที่ควรใช้เวลาส่วนใหญ่ คุยเป็นประโยคได้ตลอด")
+                bullet("โซน 3 ปานกลาง — เหนื่อยขึ้นแต่ยังคุมได้ อากาศร้อนชื้นดันขึ้นมาโซนนี้ได้ง่าย")
+                bullet("โซน 4 หนัก — ช่วง threshold ใช้ในรอบคุณภาพ")
+                bullet("โซน 5 สูงสุด — อินเทอร์วัลสั้น ๆ เท่านั้น")
+            }
+
+            section("ข้อจำกัด")
+            VStack(alignment: .leading, spacing: 7) {
+                bullet("ชีพจรจากข้อมือคลาดเคลื่อนได้ตอนอินเทอร์วัลหรือปีนหิน เพราะนาฬิกาอาจไปจับจังหวะก้าวแทน")
+                bullet("อากาศร้อนชื้นดันชีพจรขึ้นได้ 5–15 ครั้ง/นาที ที่ความเร็วเท่าเดิม ให้ยึดความรู้สึกร่วมด้วย")
+                bullet("ไม่ใช่คำแนะนำทางการแพทย์")
+            }
         }
     }
 
