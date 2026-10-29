@@ -306,7 +306,7 @@
   .day{min-height:54px;border-radius:10px;padding:4px 2px 5px;text-align:center}
   .day .num{font-size:12.5px;font-weight:600;line-height:1.5}
   .day.out .num{color:#c7c7cc}
-  .day.today{background:#eef3ff}
+  .day.today{background:#eef3ff;box-shadow:inset 0 0 0 1.5px #2f7bff}
   .day.today .num{color:#2f7bff;font-weight:700}
   /* The pill says what the day was: colour is the kind of session, the dashed outline means
      planned rather than done. Nothing is printed for a day with neither. */
@@ -368,6 +368,18 @@
   .wrow.stale{background:#fdf3e2;border-radius:12px;padding:10px 11px;border-top:0;margin-top:8px}
   /* State, then the condition with the action under it. Three columns of Thai in a 388px phone
      wrap mid-phrase and stop being readable, so the action gets its own line. */
+  /* Alert per session type: what beeps, at what number, and what deliberately does not. */
+  .al{margin-top:10px}
+  .al .t{display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--hair)}
+  .al .t:last-child{border-bottom:0;padding-bottom:0}
+  .al .t .k{width:76px;flex:none}
+  .al .t .k b{display:block;font-size:11.5px;font-weight:700;letter-spacing:.02em}
+  .al .t .k i{display:block;font-style:normal;font-size:10.5px;color:var(--muted);margin-top:1px}
+  .al .t .v{flex:1;min-width:0;font-size:12px;line-height:1.5}
+  .al .t .v b{font-weight:600}
+  .al .t .v span{display:block;color:var(--muted);margin-top:2px}
+  .al .t .v .no{color:#b0b0b5}
+  .al .num{font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink)}
   .life{margin-top:10px}
   .life .st{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--hair)}
   .life .st:last-child{border-bottom:0;padding-bottom:0}
@@ -704,7 +716,7 @@
         <div class="step"><span class="when">15 นาที</span>
           <span class="what"><b>วอร์มอัพ</b><span>จ๊อกเบา + dynamic · จบด้วย strides 2×10 วินาที</span></span></div>
         <div class="step"><span class="when">40 นาที</span>
-          <span class="what"><b>ช่วงหลัก · 7:14–7:55 /กม.</b><span>โซน 2 · ชีพจร 124–137 · คุยเป็นประโยคได้ตลอด</span></span></div>
+          <span class="what"><b>ช่วงหลัก · 7:14–7:55 /กม.</b><span>โซน 2 · ชีพจร 137–150 · คุยเป็นประโยคได้ตลอด</span></span></div>
         <div class="step"><span class="when">10 นาที</span>
           <span class="what"><b>คูลดาวน์</b><span>จ๊อกเบาจนชีพจรต่ำกว่า 120</span></span></div>
         <div class="step"><span class="when">หลังจบ</span>
@@ -1310,7 +1322,7 @@
   </div>
   <div class="screen">
     <div class="apphead"><h2>แผนบนนาฬิกา</h2></div>
-    <p class="fine" style="margin:0 0 14px">กฎเดียว: <b>นาฬิกาเป็นกระจกของแผน 7 วันข้างหน้า ไม่ใช่ที่เก็บของ</b> — ทุกครั้งที่ซิงก์ แอปจะ<b>เก็บกวาดก่อน แล้วค่อยส่งใหม่</b> ของที่ทำไปแล้วหรือเลยวันมาแล้วจะไม่ถูกทิ้งค้างไว้</p>
+    <p class="fine" style="margin:0 0 14px">กฎเดียว: <b>นาฬิกาถือแค่ 3 ครั้งถัดไป ไม่ใช่ที่เก็บของ</b> — ทุกครั้งที่ซิงก์ แอปจะ<b>เก็บกวาดก่อน แล้วค่อยส่งใหม่</b> ของที่ทำไปแล้วหรือเลยวันมาแล้วจะไม่ถูกทิ้งค้างไว้</p>
 
     <div class="card loadcard">
       <span class="label">1 · สิ่งที่ลงไปอยู่บนนาฬิกา</span>
@@ -1323,7 +1335,7 @@
               <div><i>วอร์มอัพ</i><b>15:00</b></div>
               <div><i>ช่วงหลัก</i><b>40:00</b></div>
               <div><i>pace</i><b style="color:#30d158">7:14–7:55</b></div>
-              <div><i>ชีพจร</i><b style="color:#ff9f0a">124–137</b></div>
+              <div><i>เพดาน</i><b style="color:#ff9f0a">&lt; 150</b></div>
               <div><i>คูลดาวน์</i><b>10:00</b></div>
             </div>
             <div class="go">เริ่ม</div>
@@ -1352,14 +1364,50 @@
       <span class="label">3 · กันพัง — 3 ชั้น</span>
       <table class="bands formula phases" style="margin-top:10px">
         <tr><td>เก็บกวาดก่อนส่ง</td><td>ทุกซิงก์ อ่านของบนนาฬิกามาเทียบกับแผนก่อนเสมอ แล้วค่อยเติม</td></tr>
-        <tr><td>เพดานช่อง</td><td>WorkoutKit จำกัดจำนวนงานที่ตั้งไว้ได้ — อ่านค่าจริงตอนรัน ไม่ฝังเลข ถ้าใกล้เต็มตัดวันที่ไกลที่สุดทิ้งก่อน</td></tr>
+        <tr><td>เพดานช่อง</td><td>WorkoutKit จำกัดจำนวนงานที่ตั้งไว้ได้ — อ่านค่าจริงตอนรัน ไม่ฝังเลข แต่ 3 ช่องคงที่อยู่ใต้เพดานทุกกรณีอยู่แล้ว</td></tr>
         <tr><td>ล้างทั้งหมด</td><td>ปุ่มในตั้งค่า เรียก removeAllWorkouts — ทางออกสุดท้ายถ้าเคยค้างจนงง</td></tr>
       </table>
-      <p class="what">ส่งล่วงหน้า <b>7 วัน</b> ไม่ใช่ทั้ง 60 วันของ horizon เพราะชนเพดานแน่และทำให้แอป Workout รก · ส่งเฉพาะครั้งต่อไปอย่างเดียวก็เสี่ยงไม่มีงานถ้าไม่ได้เปิดแอป</p>
+      <p class="what">ส่ง <b>3 ครั้งถัดไป</b> นับเป็น "ครั้ง" ไม่ใช่ "วัน" — วันพักถูกข้ามอยู่แล้ว 3 ครั้งจึงกินเวลาจริงราว 5–7 วัน และใช้ช่องแน่นอน 3 ช่องเสมอ ไม่ว่าแผนจะหนาแค่ไหน · ไม่ส่งทั้ง 60 วันของ horizon เพราะชนเพดานและทำให้แอป Workout รก · ไม่ส่งแค่ครั้งเดียวเพราะเสี่ยงไม่มีงานถ้าไม่ได้เปิดแอป</p>
     </div>
 
     <div class="card loadcard">
-      <span class="label">4 · สถานะที่เห็นในการ์ด "ครั้งต่อไป"</span>
+      <span class="label">4 · เตือนอะไร ในการซ้อมแบบไหน</span>
+      <p class="what" style="margin:9px 0 0">ตัวเลขด้านล่างเป็นโซนจริงของคุณ (max 189 วัดได้เมื่อ 11 เม.ย. · ชีพจรพัก 59 · Karvonen) ไม่ใช่โซนที่ Apple เดาเอง</p>
+      <div class="al">
+        <div class="t"><div class="k"><b style="color:#3d6b28">EASY</b><i>วิ่งเบา</i></div>
+          <div class="v"><b>เพดานชีพจร <span class="num">&lt; 150</span></b>
+            <span>บนสุดของโซน 2 · ขาขึ้นคือทางเดียวที่พลาดได้ เลยเตือนด้านเดียว · <b class="no">ไม่เตือน pace</b> — อากาศร้อนดัน pace ช้าลงได้ 30–60 วิ/กม. โดยที่ความเหนื่อยเท่าเดิม สองเป้าจะตีกันเอง</span></div></div>
+
+        <div class="t"><div class="k"><b style="color:#1d5fb8">LONG</b><i>วิ่งยาว</i></div>
+          <div class="v"><b>เพดานชีพจร <span class="num">&lt; 155</span></b>
+            <span>โซน 2 บวกผ่อนให้ 5 ครั้ง เพราะวิ่งเกินชั่วโมงชีพจรจะไต่ขึ้นเองที่ความเหนื่อยเดิม (cardiac drift) ถ้าใช้ 150 เท่า easy จะดังรัวช่วงท้ายโดยที่ไม่ได้วิ่งหนักขึ้น</span></div></div>
+
+        <div class="t"><div class="k"><b style="color:#9c6a15">MAR</b><i>จังหวะมาราธอน</i></div>
+          <div class="v"><b>ช่วง pace · แบบ <code>.average</code></b>
+            <span>จุดประสงค์คือซ้อมจังหวะที่จะใช้จริง เลยวัดค่าเฉลี่ยทั้งเซสชัน ไม่ใช่ค่าปัจจุบันที่แกว่งทุกก้าว · <b class="no">ไม่เตือนชีพจร</b> จะดังซ้อนกันสองเด้ง</span></div></div>
+
+        <div class="t"><div class="k"><b style="color:#b5541f">THR</b><i>เทมโป</i></div>
+          <div class="v"><b>ช่วง pace · แบบ <code>.current</code></b>
+            <span>ต้องรู้ทันทีว่าหลุดจังหวะ ไม่ใช่รู้ตอนจบ · <b class="no">ไม่เตือนชีพจร</b> — ชีพจรช่วง threshold ไต่ขึ้นตลอดอยู่แล้ว จะดังทั้งที่ยังถูกต้อง</span></div></div>
+
+        <div class="t"><div class="k"><b style="color:#9c3b33">INT</b><i>อินเทอร์วัล</i></div>
+          <div class="v"><b>ช่วง pace เฉพาะช่วง work · <code>.current</code></b>
+            <span><b class="no">ชีพจรใช้ไม่ได้เลยกับงานนี้</b> — ชีพจรตามหลังความเหนื่อย 60–90 วินาที เซ็ต 2 นาทีจบตอนชีพจรยังไต่ไม่ถึงที่ · ช่วงพักไม่ใส่ alert จะได้ไม่ดังตอนที่ควรปล่อยให้ชีพจรลง</span></div></div>
+
+        <div class="t"><div class="k"><b style="color:#7a2b56">REP</b><i>รีพีต</i></div>
+          <div class="v"><b class="no">ไม่ใส่ alert เลย</b>
+            <span>เซ็ต 20–40 วินาทีจบก่อนที่ feedback จะมาถึง นาฬิกามีหน้าที่เดียวคือจับเวลาให้ครบเซ็ต · จะเตือนก็ต้องเป็น cadence ซึ่งรอบขายังไม่ได้อยู่ในแผน</span></div></div>
+
+        <div class="t"><div class="k"><b style="color:#8a8a8e">พัก / ครอส</b><i>ไม่ส่ง</i></div>
+          <div class="v"><b class="no">ไม่ส่งเข้านาฬิกา</b>
+            <span>ปีนผาไม่มีโครงที่ WorkoutKit จับได้ และงาน "พัก" ที่โผล่ในแอป Workout คือสิ่งรบกวนเปล่า ๆ</span></div></div>
+      </div>
+      <p class="what"><b>ข้อจำกัดที่ต้องรู้:</b> WorkoutKit <b>ไม่มี HeartRateThresholdAlert</b> — ชีพจรมีแต่แบบช่วงเท่านั้น (ต่างจาก speed / cadence / power ที่มีแบบด้านเดียว) "เพดาน &lt; 150" จึงทำโดยส่งช่วง <span class="num">120–150</span> ให้พื้นต่ำพอที่ในทางปฏิบัติจะมีแต่เพดานที่ดัง<br>
+        ก่อนแนบทุก alert จะเช็ค <b>CustomWorkout.supportsAlert</b> ก่อน ถ้ารุ่นนาฬิกาไม่รองรับให้ตัด alert ทิ้ง ไม่ใช่ทำทั้ง workout พัง</p>
+    </div>
+
+    <div class="card loadcard">
+      <span class="label">5 · สถานะที่เห็นในการ์ด "ครั้งต่อไป"</span>
       <div class="wrow sent" style="border-top:0;margin-top:10px;padding-top:0">
         <span class="wic">✓</span>
         <div class="txt"><b>อยู่บน Apple Watch แล้ว</b><span>ตั้งไว้ 06:30 น. · โครงครบ 65 นาที</span></div>
@@ -1384,11 +1432,11 @@
     </div>
 
     <div class="card loadcard">
-      <span class="label">5 · แถวในหน้าตั้งค่า</span>
-      <div class="row" style="margin-top:8px"><div class="txt"><b>ส่งแผนเข้า Apple Watch</b><span>อัตโนมัติทุกครั้งที่ซิงก์ · 7 วันข้างหน้า</span></div><div class="toggle"></div></div>
+      <span class="label">6 · แถวในหน้าตั้งค่า</span>
+      <div class="row" style="margin-top:8px"><div class="txt"><b>ส่งแผนเข้า Apple Watch</b><span>อัตโนมัติทุกครั้งที่ซิงก์ · 3 ครั้งถัดไป</span></div><div class="toggle"></div></div>
       <div class="row"><div class="txt"><b>เวลาเริ่มที่ตั้งให้</b><span>ใช้เวลาที่ซ้อมบ่อยที่สุดจากประวัติ</span></div><div class="end">06:30</div>
         <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
-      <div class="row"><div class="txt"><b>อยู่บนนาฬิกาตอนนี้</b><span>เก็บกวาดล่าสุด 09:38</span></div><div class="end">3 <em>งาน</em></div></div>
+      <div class="row"><div class="txt"><b>อยู่บนนาฬิกาตอนนี้</b><span>เก็บกวาดล่าสุด 09:38 · พฤ 30, อา 2, อ 4</span></div><div class="end">3 <em>งาน</em></div></div>
       <div class="row danger"><div class="ic" style="background:#fdeceb"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M10 7V5h4v2M8 7l1 13h6l1-13" stroke="#d0352b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="txt"><b>ล้างแผนทั้งหมดจากนาฬิกา</b><span>ไม่กระทบแผนในปฏิทิน ส่งใหม่ได้ตลอด</span></div>
         <svg class="chev" width="8" height="13" viewBox="0 0 8 13" fill="none"><path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>

@@ -176,6 +176,12 @@ private struct PlanDayCell: View {
             isToday ? Brand.blue.opacity(0.12) : .clear,
             in: RoundedRectangle(cornerRadius: 10, style: .continuous)
         )
+        .overlay {
+            if isToday {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Brand.blue, lineWidth: 1.5)
+            }
+        }
         .contentShape(.rect)
     }
 
