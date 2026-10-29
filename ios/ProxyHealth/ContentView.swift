@@ -5,7 +5,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @State private var dashboard = Dashboard()
-    @State private var tab: AppTab = .latest
+    @State private var tab: AppTab = AppTab.launchDefault
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {

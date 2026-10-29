@@ -234,6 +234,18 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .settings: "ตั้งค่า"
         }
     }
+    /// Which tab the app opens on. A simulator run can ask for one by name, so a screen can be
+    /// put in front of a camera without synthesising taps:
+    ///   xcrun simctl launch booted <bundle id> -tab calendar
+    static var launchDefault: AppTab {
+        #if DEBUG
+        if let name = UserDefaults.standard.string(forKey: "tab"), let tab = AppTab(rawValue: name) {
+            return tab
+        }
+        #endif
+        return .latest
+    }
+
     var symbol: String {
         switch self {
         case .latest: "house.fill"
