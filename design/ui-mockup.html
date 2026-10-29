@@ -294,6 +294,30 @@
   .zbounds span{flex:1;min-width:0;text-align:right;font-size:10.5px;color:var(--muted);
                 font-variant-numeric:tabular-nums}
   .zbounds .first{position:absolute;left:0;top:0;flex:none;text-align:left}
+  /* ---- calendar ---- */
+  .calhead{display:flex;align-items:center;gap:10px;margin:0 2px 12px}
+  .calhead h2{margin:0;font-size:20px;font-weight:700;letter-spacing:-.02em}
+  .calhead .nav{margin-left:auto;display:flex;gap:6px}
+  .calhead .nav span{width:28px;height:28px;border-radius:9px;background:#fff;display:grid;place-items:center;
+                     box-shadow:0 1px 2px rgba(16,24,40,.06);font-size:12px;color:var(--muted)}
+  .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:6px}
+  .dow div{text-align:center;font-size:10px;color:var(--muted);font-weight:600}
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .day{min-height:54px;border-radius:10px;padding:4px 2px 5px;text-align:center}
+  .day .num{font-size:12.5px;font-weight:600;line-height:1.5}
+  .day.out .num{color:#c7c7cc}
+  .day.today{background:#eef3ff}
+  .day.today .num{color:#2f7bff;font-weight:700}
+  /* The pill says what the day was: colour is the kind of session, the dashed outline means
+     planned rather than done. Nothing is printed for a day with neither. */
+  .pill{display:block;margin:3px auto 0;width:32px;height:13px;border-radius:7px;font-size:7.5px;
+        font-weight:700;color:#fff;line-height:13px;letter-spacing:.02em}
+  .pill.plan{background:transparent;border:1.3px dashed currentColor;line-height:11px}
+  .pill.rest{background:#dcdce2;color:#7b7b84}
+  .dot{display:block;width:5px;height:5px;border-radius:50%;background:#d0352b;margin:3px auto 0}
+  .legend2{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:14px}
+  .legend2 span{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--muted)}
+  .legend2 i{width:14px;height:9px;border-radius:5px;display:inline-block}
   .phone.tall{height:auto}
   .phone.tall .screen{height:auto;overflow:visible;padding-bottom:40px}
   .loadcard{margin:0 0 12px}
@@ -556,6 +580,73 @@
 </div>
 
   <!-- TAB: ประวัติ -->
+
+  <div class="screen hidden" data-tab="calendar">
+    <div class="calhead">
+      <h2>ตุลาคม 2569</h2>
+      <div class="nav"><span>‹</span><span>›</span></div>
+    </div>
+
+    <div class="dow"><div>อา</div><div>จ</div><div>อ</div><div>พ</div><div>พฤ</div><div>ศ</div><div>ส</div></div>
+    <div class="cal">
+        <div class="day out"><div class="num"></div></div>
+        <div class="day out"><div class="num"></div></div>
+        <div class="day out"><div class="num"></div></div>
+        <div class="day"><div class="num">1</div><span class="pill" style="background:#6cbf3a">EASY</span></div>
+        <div class="day"><div class="num">2</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">3</div><span class="pill" style="background:#e8853d">THR</span></div>
+        <div class="day"><div class="num">4</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">5</div><span class="pill" style="background:#2f7bff">LONG</span></div>
+        <div class="day"><div class="num">6</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">7</div><span class="pill" style="background:#2bb3a3">ปีนผา</span></div>
+        <div class="day"><div class="num">8</div><span class="pill" style="background:#6cbf3a">EASY</span></div>
+        <div class="day"><div class="num">9</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">10</div><span class="pill" style="background:#e0453a">INT</span><span class="dot"></span></div>
+        <div class="day"><div class="num">11</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">12</div><span class="pill" style="background:#2f7bff">LONG</span></div>
+        <div class="day"><div class="num">13</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">14</div><span class="pill" style="background:#2bb3a3">ปีนผา</span></div>
+        <div class="day"><div class="num">15</div><span class="pill" style="background:#6cbf3a">EASY</span></div>
+        <div class="day"><div class="num">16</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">17</div><span class="pill" style="background:#e8853d">THR</span></div>
+        <div class="day"><div class="num">18</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">19</div><span class="pill" style="background:#2f7bff">LONG</span></div>
+        <div class="day"><div class="num">20</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">21</div><span class="pill" style="background:#2bb3a3">ปีนผา</span></div>
+        <div class="day"><div class="num">22</div><span class="pill" style="background:#6cbf3a">EASY</span></div>
+        <div class="day"><div class="num">23</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">24</div><span class="pill" style="background:#e0453a">INT</span><span class="dot"></span></div>
+        <div class="day"><div class="num">25</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">26</div><span class="pill" style="background:#2f7bff">LONG</span></div>
+        <div class="day"><div class="num">27</div><span class="pill rest">พัก</span></div>
+        <div class="day"><div class="num">28</div><span class="pill" style="background:#2bb3a3">ปีนผา</span></div>
+        <div class="day today"><div class="num">29</div></div>
+        <div class="day"><div class="num">30</div><span class="pill plan" style="color:#6cbf3a">EASY</span></div>
+        <div class="day"><div class="num">31</div><span class="pill plan" style="color:#e8853d">THR</span></div>
+        <div class="day out"><div class="num">1</div><span class="pill plan" style="color:#6cbf3a">EASY</span></div>
+
+    </div>
+
+    <div class="legend2">
+      <span><i style="background:#6cbf3a"></i>เบา</span>
+      <span><i style="background:#2f7bff"></i>ยาว</span>
+      <span><i style="background:#e8853d"></i>threshold</span>
+      <span><i style="background:#e0453a"></i>interval</span>
+      <span><i style="background:#2bb3a3"></i>ปีนผา/อื่น ๆ</span>
+      <span><i style="background:#dcdce2"></i>พัก</span>
+      <span><i style="border:1.3px dashed #8a8a8e;background:transparent"></i>แผน</span>
+      <span><i style="width:7px;height:7px;border-radius:50%;background:#d0352b"></i>หนักกว่าแผน</span>
+    </div>
+
+    <h3 class="sec">สัปดาห์นี้ <span class="hint">26 ต.ค. – 1 พ.ย.</span></h3>
+    <div class="card">
+      <div class="row"><div class="txt"><b>วิ่ง 3 ครั้ง · 21.4 กม.</b><span>ทำไปแล้ว 2 ครั้ง · 16.0 กม.</span></div><div class="end">76%</div></div>
+      <div class="row"><div class="txt"><b>รอบคุณภาพ 1 ครั้ง</b><span>threshold · ศุกร์ 31 ต.ค.</span></div><div class="end">แผน</div></div>
+      <div class="row"><div class="txt"><b>ปีนผา 2 ครั้ง</b><span>พฤหัส · อาทิตย์</span></div><div class="end">1/2</div></div>
+    </div>
+    <p class="fine">แผนมาจากการคุยกับโค้ชใน Claude — เพิ่มหรือแก้ได้เฉพาะวันนี้เป็นต้นไป วันที่ผ่านมาแล้วเป็นบันทึก ไม่ใช่แผน จึงแก้ไม่ได้</p>
+  </div>
+
   <div class="screen hidden" data-tab="history">
     <div class="apphead"><div><h2>ประวัติ</h2><div class="sub">การซิงก์และความครอบคลุมข้อมูล</div></div></div>
 
@@ -677,6 +768,9 @@
     <div class="tab on" data-go="latest">
       <svg viewBox="0 0 24 24" fill="none"><path d="M4 11.5L12 5l8 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 10.5V19h11v-8.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
       ล่าสุด</div>
+    <div class="tab" data-go="calendar">
+      <svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15" rx="3" stroke="currentColor" stroke-width="2"/><path d="M3.5 9.5h17M8 3.5V6M16 3.5V6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      ปฏิทิน</div>
     <div class="tab" data-go="history">
       <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       ประวัติ</div>
@@ -1000,6 +1094,53 @@
 <div class="caption">ตั้งค่า → เก็บข้อมูลย้อนหลัง</div>
 </div>
 
+
+<!-- ============ DAY DETAIL ============ -->
+<div class="phone-wrap">
+<div class="phone">
+  <div class="statusbar"><span>9:41</span>
+    <span class="icons"><span class="bars"><i></i><i></i><i></i><i></i></span>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 10.5l2-2.2a2.9 2.9 0 00-4 0l2 2.2z" fill="#1c1c1e"/><path d="M3.6 5.6a6.5 6.5 0 018.8 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/><path d="M1 3a10 10 0 0114 0" stroke="#1c1c1e" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span class="batt"><b></b></span></span>
+  </div>
+  <div class="sheet-dim"></div>
+  <div class="sheet" style="max-height:82%">
+    <div class="grabber"></div>
+    <div class="sheet-body">
+      <h2 style="margin-bottom:2px">เสาร์ 24 ต.ค.</h2>
+      <p class="lede" style="margin-top:0">แผน: <b>interval</b> 4 เซ็ต × 2 นาที · pace 7:05–7:15</p>
+
+      <div class="label" style="margin-top:20px">ที่ทำจริง</div>
+      <div class="card" style="margin-top:8px">
+        <div class="row"><div class="txt"><b>วิ่ง · 4.71 กม.</b><span>18:05 – 18:55 · 29.6°C ชื้น 66%</span></div><div class="end">50 <em>นาที</em></div></div>
+        <div class="row"><div class="txt"><b>ชีพจรเฉลี่ย / สูงสุด</b><span>เซ็ตสุดท้ายแตะ 182</span></div><div class="end">146 / 182</div></div>
+        <div class="row"><div class="txt"><b>เวลาในโซน</b><span>โซน 4–5 รวม 9 นาที</span></div><div class="end">Z3 22 · Z4 7 · Z5 2</div></div>
+      </div>
+
+      <div class="label" style="margin-top:20px">แต่ละเซ็ต</div>
+      <table class="bands formula phases" style="margin-top:8px">
+        <tr><td>เซ็ต 1</td><td>427 ม. · 2:28 · 5:46/กม. · HR สูงสุด 174</td></tr>
+        <tr><td>เซ็ต 2</td><td>2:00 · 7:21/กม. · HR สูงสุด 176</td></tr>
+        <tr><td>เซ็ต 3</td><td>2:00 · 7:43/กม. · HR สูงสุด 180</td></tr>
+        <tr><td>เซ็ต 4</td><td>420 ม. · 2:40 · 6:20/กม. · HR สูงสุด 182</td></tr>
+      </table>
+
+      <p class="fine"><b>หนักกว่าแผน</b> — เซ็ตแรกออกที่ 5:46/กม. เร็วกว่าที่วางไว้ราว 1:20 ต่อกิโล และ HR สูงสุดไต่ขึ้นทุกเซ็ตจนแตะ 97% ของค่าสูงสุดที่เคยวัดได้</p>
+
+      <div class="label" style="margin-top:20px">วันนั้นทั้งวัน</div>
+      <div class="card" style="margin-top:8px">
+        <div class="row"><div class="txt"><b>นอนคืนก่อน</b><span>22:57 – 06:44</span></div><div class="end">7:43</div></div>
+        <div class="row"><div class="txt"><b>ความพร้อมเช้านั้น</b><span>HRV 54 · ชีพจรพัก 56</span></div><div class="end">68 <em>พร้อม</em></div></div>
+        <div class="row"><div class="txt"><b>พลังงานร่างกาย</b><span>ตื่น 91% → เข้านอน 38%</span></div><div class="end">−53%</div></div>
+      </div>
+
+      <p class="fine" style="margin-top:18px">แผนของวันที่ผ่านไปแล้วแก้ไม่ได้ — เก็บไว้เพื่อเทียบว่าตั้งใจทำอะไรกับได้อะไรจริง</p>
+    </div>
+  </div>
+</div>
+<div class="caption">กดวันในปฏิทิน — รายละเอียดของวันนั้น</div>
+</div>
+
 <!-- ============ LOADING STATES ============ -->
 <div class="phone-wrap">
 <div class="phone tall">
@@ -1080,8 +1221,8 @@
   // Clone the phone twice so the three tabs can be seen side by side, then set each one's tab.
   const stage = document.querySelector('.stage');
   const first = document.querySelector('.phone-wrap');
-  const captions = ['แท็บ 2 — ประวัติ', 'แท็บ 3 — ตั้งค่า'];
-  ['history', 'settings'].forEach((tab, i) => {
+  const captions = ['แท็บ 2 — ปฏิทิน', 'แท็บ 3 — ประวัติ', 'แท็บ 4 — ตั้งค่า'];
+  ['calendar', 'history', 'settings'].forEach((tab, i) => {
     const clone = first.cloneNode(true);
     clone.querySelector('.caption').textContent = captions[i];
     stage.appendChild(clone);
