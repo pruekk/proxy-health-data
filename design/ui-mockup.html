@@ -321,8 +321,11 @@
   .pill.missed{background:transparent;border:1.3px dashed #c7c7cc;color:#b0b0b5;line-height:11px;
                text-decoration:line-through}
   .pill.swap{position:relative}
-  .pill.swap::after{content:"≠";position:absolute;right:-6px;top:-5px;font-size:9px;color:#8a6b14;
-                    background:#fff;border-radius:50%;width:11px;height:11px;line-height:11px}
+  /* "≠" reads as an error. A swap arrow says what happened: a different session was done, not
+     a wrong one — the plan it replaced is named in the day's detail. */
+  .pill.swap::after{content:"⇄";position:absolute;right:-5px;top:-6px;font-size:8px;color:#5a5a62;
+                    background:#fff;border:1px solid var(--hair);border-radius:50%;
+                    width:12px;height:12px;line-height:11px;text-align:center}
   .rx{margin-top:10px}
   .rx .step{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--hair)}
   .rx .step:last-child{border-bottom:0}
@@ -651,7 +654,7 @@
       <span><i style="background:#dcdce2"></i>พัก</span>
       <span><i style="border:1.3px dashed #8a8a8e;background:transparent"></i>แผน</span>
       <span><i style="border:1.3px dashed #c7c7cc;background:transparent"></i>ไม่ได้ทำ</span>
-      <span><i style="background:#6cbf3a;position:relative">≠</i>ทำคนละแบบกับแผน</span>
+      <span><i style="background:#6cbf3a"></i>⇄ ทำคนละแบบกับแผน</span>
       <span><i style="width:7px;height:7px;border-radius:50%;background:#d0352b"></i>หนักกว่าแผน</span>
     </div>
 
