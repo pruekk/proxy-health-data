@@ -39,6 +39,41 @@ enum WorkoutExport {
         await WorkoutScheduler.shared.requestAuthorization()
     }
 
+    #if DEBUG
+    /// Prints exactly what WorkoutKit will accept for an outdoor run on this watch, so the real
+    /// device test starts from facts rather than from what the headers imply.
+    static func probeCapabilities() {
+        let activity = HKWorkoutActivityType.running
+        let location = HKWorkoutSessionLocationType.outdoor
+        func supports(_ label: String, _ alert: any WorkoutAlert) {
+            print("[probe] alert \(label): \(CustomWorkout.supportsAlert(alert, activity: activity, location: location))")
+        }
+        print("[probe] maxAllowedScheduledWorkoutCount = \(WorkoutScheduler.maxAllowedScheduledWorkoutCount)")
+        print("[probe] supportsActivity(.running) = \(CustomWorkout.supportsActivity(activity))")
+        for (label, goal) in [("open", WorkoutGoal.open),
+                              ("time 30min", .time(30, .minutes)),
+                              ("distance 8km", .distance(8, .kilometers)),
+                              ("energy 300kcal", .energy(300, .kilocalories))] {
+            print("[probe] goal \(label): \(CustomWorkout.supportsGoal(goal, activity: activity, location: location))")
+        }
+        let bpm = UnitFrequency.beatsPerMinute
+        supports("HeartRateRange 100-150", HeartRateRangeAlert(
+            target: Measurement(value: 100, unit: bpm)...Measurement(value: 150, unit: bpm)))
+        supports("HeartRateZone 2", HeartRateZoneAlert(zone: 2))
+        supports("SpeedRange .current", SpeedRangeAlert(
+            target: Measurement(value: 2.1, unit: UnitSpeed.metersPerSecond)...Measurement(value: 2.3, unit: UnitSpeed.metersPerSecond),
+            metric: .current))
+        supports("SpeedRange .average", SpeedRangeAlert(
+            target: Measurement(value: 2.1, unit: UnitSpeed.metersPerSecond)...Measurement(value: 2.3, unit: UnitSpeed.metersPerSecond),
+            metric: .average))
+        supports("CadenceRange 160-180", CadenceRangeAlert(
+            target: Measurement(value: 160, unit: bpm)...Measurement(value: 180, unit: bpm)))
+        // PowerRangeAlert's metric: variant needs iOS 17.4 / watchOS 10.4; the plain init is 17.0.
+        supports("PowerRange 200-250W", PowerRangeAlert(
+            target: Measurement(value: 200, unit: UnitPower.watts)...Measurement(value: 250, unit: UnitPower.watts)))
+    }
+    #endif
+
     // MARK: Reconcile
 
     struct Outcome {

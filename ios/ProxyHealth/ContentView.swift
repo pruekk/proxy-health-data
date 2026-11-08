@@ -28,6 +28,7 @@ struct ContentView: View {
             // Simulator testing: `-watchSend 1` asks for the scheduling permission and pushes
             // the plan at launch, so the hand-off can be exercised without reaching a control
             // that sits below the fold.
+            if UserDefaults.standard.bool(forKey: "watchProbe") { WorkoutExport.probeCapabilities() }
             guard UserDefaults.standard.bool(forKey: "watchSend") else { return }
             _ = await WorkoutExport.requestAuthorization()
             await dashboard.loadPlan(settings: model.settings, month: .current, force: true)
