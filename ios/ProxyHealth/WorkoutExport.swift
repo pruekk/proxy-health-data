@@ -19,7 +19,16 @@ enum WorkoutExport {
     /// the plan is — under the cap by construction rather than by luck.
     static let sessionsAhead = 3
 
+    /// Whether the scheduling API exists here. Note this is true even with no watch paired —
+    /// see `WatchPairing`, which answers the question the user actually cares about.
     static var isSupported: Bool { WorkoutScheduler.isSupported }
+
+    /// Whether a workout sent now would reach anything. Scheduling without a paired watch
+    /// succeeds and reads back, so without this the app reports a session sitting on a watch
+    /// that does not exist.
+    static func hasWatch() async -> Bool {
+        await WatchPairing.shared.refresh() == .paired
+    }
 
     static var authorization: WorkoutScheduler.AuthorizationState {
         get async { await WorkoutScheduler.shared.authorizationState }
@@ -51,6 +60,13 @@ enum WorkoutExport {
         }
         guard await authorization == .authorized else {
             outcome.unavailable = "ยังไม่ได้อนุญาตให้ส่งแผนเข้านาฬิกา"
+            return outcome
+        }
+        // Checked after authorization so the prompt still appears on a phone whose watch is
+        // merely flat, but before writing anything: scheduling into the void then reporting
+        // success is worse than refusing.
+        guard await hasWatch() else {
+            outcome.unavailable = "ไม่พบ Apple Watch ที่จับคู่กับเครื่องนี้"
             return outcome
         }
 
@@ -95,7 +111,8 @@ enum WorkoutExport {
     }
 
     static func scheduledDates() async -> [String] {
-        guard WorkoutScheduler.isSupported, await authorization == .authorized else { return [] }
+        guard WorkoutScheduler.isSupported, await authorization == .authorized, await hasWatch()
+        else { return [] }
         return (await WorkoutScheduler.shared.scheduledWorkouts)
             .compactMap { dayKey(from: $0.date) }
             .sorted()

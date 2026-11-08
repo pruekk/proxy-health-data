@@ -15,10 +15,11 @@ struct WatchSettingsSection: View {
     @State private var startMinute = SyncState.watchStartMinuteOfDay
     @State private var authorization: WorkoutScheduler.AuthorizationState?
     @State private var confirmingClear = false
+    @State private var pairing: WatchPairing.State = .unknown
 
     var body: some View {
         VStack(spacing: 0) {
-            SectionTitle(text: "Apple Watch", hint: WorkoutExport.isSupported ? nil : "ไม่รองรับ")
+            SectionTitle(text: "Apple Watch", hint: pairingHint)
             Card(vertical: 3) {
                 VStack(spacing: 0) {
                     Toggle(isOn: Binding(get: { exporting }, set: { setExporting($0) })) {
@@ -29,7 +30,7 @@ struct WatchSettingsSection: View {
                         }
                     }
                     .padding(.vertical, 9)
-                    .disabled(!WorkoutExport.isSupported)
+                    .disabled(!WorkoutExport.isSupported || pairing != .paired)
 
                     Divider()
                     DatePicker(selection: Binding(get: { startDate }, set: { setStart($0) }),
@@ -81,6 +82,7 @@ struct WatchSettingsSection: View {
         }
         .task {
             authorization = await WorkoutExport.authorization
+            pairing = await WatchPairing.shared.refresh()
             await dashboard.refreshWatchDates()
         }
         .confirmationDialog("ล้างแผนทั้งหมดจากนาฬิกา", isPresented: $confirmingClear, titleVisibility: .visible) {
@@ -88,6 +90,15 @@ struct WatchSettingsSection: View {
             Button("ยกเลิก", role: .cancel) {}
         } message: {
             Text("แผนในปฏิทินยังอยู่ครบ กดส่งใหม่หรือรอรอบซิงก์ถัดไปก็กลับมา")
+        }
+    }
+
+    /// Names the blocker rather than leaving the section looking merely empty.
+    private var pairingHint: String? {
+        if !WorkoutExport.isSupported { return "ไม่รองรับ" }
+        switch pairing {
+        case .noWatchPaired, .unsupported: return "ยังไม่ได้จับคู่นาฬิกา"
+        case .unknown, .paired: return nil
         }
     }
 

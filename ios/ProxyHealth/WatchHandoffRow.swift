@@ -10,13 +10,17 @@ struct WatchHandoffRow: View {
     @Environment(AppModel.self) private var model
     @Environment(Dashboard.self) private var dashboard
     @State private var authorization: WorkoutScheduler.AuthorizationState?
+    @State private var pairing: WatchPairing.State = .unknown
 
     private var isOnWatch: Bool { dashboard.watchDates.contains(day.date) }
 
     /// Reading the authorization state costs an await, so until it arrives the row assumes the
     /// happy path rather than flashing "cannot send".
     private var isBlocked: Bool {
-        !WorkoutExport.isSupported || (authorization != nil && authorization != .authorized)
+        !WorkoutExport.isSupported
+            || (authorization != nil && authorization != .authorized)
+            || pairing == .noWatchPaired
+            || pairing == .unsupported
     }
 
     var body: some View {
@@ -35,12 +39,17 @@ struct WatchHandoffRow: View {
         }
         .padding(.top, 13)
         .overlay(alignment: .top) { Divider() }
-        .task { authorization = await WorkoutExport.authorization }
+        .task {
+            authorization = await WorkoutExport.authorization
+            pairing = await WatchPairing.shared.refresh()
+        }
     }
 
     @ViewBuilder private var action: some View {
         if dashboard.isSendingToWatch {
             ProgressView().controlSize(.small)
+        } else if pairing == .noWatchPaired || pairing == .unsupported {
+            EmptyView()
         } else if isBlocked {
             button("อนุญาต", prominent: false) {
                 authorization = await WorkoutExport.requestAuthorization()
@@ -87,6 +96,11 @@ struct WatchHandoffRow: View {
         if !WorkoutExport.isSupported {
             return RowState(symbol: "minus", tint: .secondary,
                          title: "ส่งไม่ได้", detail: "เครื่องนี้ส่งแผนเข้านาฬิกาไม่ได้")
+        }
+        if pairing == .noWatchPaired || pairing == .unsupported {
+            return RowState(symbol: "applewatch.slash", tint: .secondary,
+                            title: "ยังไม่พบ Apple Watch",
+                            detail: "เครื่องนี้ยังไม่ได้จับคู่นาฬิกาไว้ — จับคู่แล้วกดส่งอีกครั้ง")
         }
         if let note = dashboard.watchNote {
             return RowState(symbol: "exclamationmark", tint: .orange, title: "ส่งไม่ได้", detail: note)
