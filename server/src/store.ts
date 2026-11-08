@@ -484,7 +484,7 @@ export async function heartRateZonesFor(uid: string) {
   const ref = baselinesCol(uid).doc('heartRateZones')
 
   const stored = await ref.get()
-  if (stored.exists && stored.get('to') === today) return plain(stored.data()!)
+  if (stored.exists && stored.get('to') === today) return withCatalogNames(plain(stored.data()!))
 
   const from = new Date(now.getTime() - 365 * 86_400_000)
   const [workouts, series] = await Promise.all([
@@ -511,7 +511,14 @@ export async function heartRateZonesFor(uid: string) {
     computedAt: now.toISOString(),
   }
   await ref.set(zones, { merge: true })
-  return plain(zones as DocumentData)
+  return withCatalogNames(plain(zones as DocumentData))
+}
+
+/** Zone names come from the catalog at read time, so a cached day picks up renamed zones. */
+function withCatalogNames(doc: DocumentData): DocumentData {
+  const names = new Map(catalog.heartRate.zones.map((z) => [z.zone, z.name]))
+  const zones = (doc.zones as { zone: number; name: string }[]).map((z) => ({ ...z, name: names.get(z.zone) ?? z.name }))
+  return { ...doc, zones }
 }
 
 /** Whole years, from a stored ISO date of birth. */
@@ -683,8 +690,10 @@ export async function collectBatteryInputs(uid: string): Promise<BatteryInputs> 
     sleepSessions(uid, { from: new Date(now.getTime() - (BATTERY_MEDIAN_NIGHTS + 1) * 86_400_000), to: now }),
   ])
 
+  // The median of the month, not the last day: one partial day of readings (a walk, a short
+  // morning) can read 20 bpm high, and that alone keeps the rest charge running all day.
   const restingSeries = (series.restingHeartRate ?? []).map((p) => p.avg).filter((v): v is number => typeof v === 'number')
-  const restingHeartRate = restingSeries.length ? restingSeries[restingSeries.length - 1] : undefined
+  const restingHeartRate = restingSeries.length ? medianOf(restingSeries) : undefined
 
   const { nights, wokeAt, naps } = groupSleep(
     sessions.map((session) => ({

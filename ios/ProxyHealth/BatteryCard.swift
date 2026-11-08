@@ -21,6 +21,7 @@ struct BatteryCard: View {
 
             headline.padding(.top, 10)
             gauge.padding(.top, 14)
+            scale.padding(.top, 8)
 
             if let message = battery.message {
                 Text(message)
@@ -48,65 +49,40 @@ struct BatteryCard: View {
                     .foregroundStyle(.secondary)
                     .padding(.leading, 8)
             }
-            Spacer(minLength: 10)
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("เข้านอน \(battery.bedLevel)% → ตื่น \(battery.wakeLevel)%")
-                Text(BatterySegments.sinceWakeText(battery.sinceWake))
-            }
-            .font(.system(size: 11.5))
-            .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
         }
     }
 
     private var gauge: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 3) {
-                ForEach(Array(BatterySegments.states(level: battery.level, wakeLevel: battery.wakeLevel).enumerated()), id: \.offset) { _, state in
-                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                        .fill(color(for: state))
-                        .frame(maxWidth: .infinity)
-                }
+        HStack(spacing: 3) {
+            ForEach(Array(BatterySegments.states(level: battery.level, wakeLevel: battery.wakeLevel).enumerated()), id: \.offset) { _, state in
+                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                    .fill(color(for: state))
+                    .frame(maxWidth: .infinity)
             }
-            .frame(height: 44)
-            markers.padding(.top, 7)
         }
+        .frame(height: 44)
     }
 
-    /// Each marker sits over its own value on the bar rather than in a caption underneath, and
-    /// the left one steps aside when the two would overlap.
-    private var markers: some View {
-        let collide = BatterySegments.markersCollide(level: battery.level, wakeLevel: battery.wakeLevel)
-        return GeometryReader { geometry in
-            ZStack(alignment: .topLeading) {
-                Text("0").font(.system(size: 11)).foregroundStyle(.tertiary)
-                Text("100").font(.system(size: 11)).foregroundStyle(.tertiary)
-                    .frame(width: geometry.size.width, alignment: .trailing)
-                marker("ตอนนี้", battery.level, at: geometry.size.width, anchor: collide ? 0.92 : 0.5)
-                marker("ตื่นมา", battery.wakeLevel, at: geometry.size.width, anchor: 0.5)
-            }
+    /// Current level on the left, the day's highest on the right. The grey between them is what
+    /// has been spent since.
+    private var scale: some View {
+        HStack {
+            Text("ตอนนี้ \(battery.level)%")
+                .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+            Spacer()
+            Text("สูงสุด \(battery.wakeLevel)%")
+                .font(.system(size: 12)).monospacedDigit()
+                .foregroundStyle(.secondary)
         }
-        .frame(height: 30)
-    }
-
-    private func marker(_ label: String, _ value: Int, at width: Double, anchor: Double) -> some View {
-        VStack(spacing: 3) {
-            Rectangle().fill(Brand.track).frame(width: 1, height: 8)
-            HStack(spacing: 3) {
-                Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
-                Text("\(value)%").font(.system(size: 12, weight: .semibold)).monospacedDigit()
-            }
-        }
-        .fixedSize()
-        .alignmentGuide(.leading) { $0.width * anchor }
-        .offset(x: width * Double(min(100, max(0, value))) / 100)
     }
 
     private func color(for state: BatterySegments.State) -> Color {
         if placeholder { return Brand.track }
         return switch state {
         case .filled: fillColor
-        case .used: Brand.track.opacity(0.95)
-        case .empty: Brand.track.opacity(0.4)
+        case .used: Color(uiColor: .systemGray3)
+        case .empty: Brand.track
         }
     }
 

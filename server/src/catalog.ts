@@ -209,20 +209,21 @@ const display = {
  * constant is here so it can be tuned with a deploy instead of a rebuild.
  */
 const battery = {
-  /** Returned per hour actually asleep. The level climbs through the night from wherever the
-   *  evening left it rather than resetting, which is what the reference device does: a 40%
-   *  bedtime and 6h19 of sleep wakes up at 78%. */
-  chargePerSleepHour: 6,
+  /** Charge per hour asleep at an empty battery; it slows as the level rises, so it is scaled by
+   *  the room left. Fitted to the reference device (Bevel) over 6–8 Nov: peaks 77, 90 and 89,
+   *  end-of-day 72, 76 and 24 after a trail walk. */
+  chargePerSleepHour: 9.5,
   sleepTargetMinutes: 480,
   /** Drained every waking hour before any activity. */
   idleDrainPerHour: 1,
   /** Active kilocalories in an hour, divided by this, is the activity drain. */
-  activeEnergyDivisor: 30,
+  activeEnergyDivisor: 120,
   /** Heart rate this far above resting starts costing; the excess is divided by the next value. */
   hrStressOffset: 15,
   hrStressDivisor: 14,
-  /** Returned per hour spent near resting heart rate with almost no movement. */
-  restChargePerHour: 1.5,
+  /** Returned per hour spent near resting heart rate with almost no movement. Zero: the fit
+   *  against Bevel found any rest charge pushed evenings up to 100%. */
+  restChargePerHour: 0,
   /** Daytime sleep charges at the same rate, but a nap cannot stand in for a night. */
   napMinMinutes: 20,
   napMaxCharge: 15,
@@ -260,9 +261,9 @@ const heartRate = {
   restingMedianDays: 30,
   zones: [
     { zone: 1, name: 'ฟื้นตัว', from: 0.5, to: 0.6 },
-    { zone: 2, name: 'เบา (แอโรบิก)', from: 0.6, to: 0.7 },
+    { zone: 2, name: 'เบา', from: 0.6, to: 0.7 },
     { zone: 3, name: 'ปานกลาง', from: 0.7, to: 0.8 },
-    { zone: 4, name: 'หนัก (threshold)', from: 0.8, to: 0.9 },
+    { zone: 4, name: 'หนัก', from: 0.8, to: 0.9 },
     { zone: 5, name: 'สูงสุด', from: 0.9, to: 1 },
   ],
 }

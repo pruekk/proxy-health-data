@@ -1,5 +1,12 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { catalog } from './catalog'
 import { compareWithUsual, computeBattery, groupSleep, type BatteryDay } from './battery'
+
+// These tests pin the arithmetic, so they run against fixed constants. The live values in
+// catalog.ts are fitted to the reference device and move with each calibration.
+const fitted = { ...catalog.battery }
+beforeAll(() => Object.assign(catalog.battery, { chargePerSleepHour: 9.5, activeEnergyDivisor: 30, restChargePerHour: 1.5 }))
+afterAll(() => Object.assign(catalog.battery, fitted))
 
 const RHR = 55
 const day = (over: Partial<BatteryDay> = {}): BatteryDay => ({
@@ -15,22 +22,24 @@ const run = (days: BatteryDay[], seedLevel = 50, hourNow?: number) =>
 
 describe('charging through the night', () => {
   test('climbs from where the evening left it', () => {
-    // The reference device: 40% at bedtime, 6h19 asleep, 78% on waking.
     const result = run([day({ asleepMinutes: 379 })], 40)
     expect(result.bedLevel).toBe(40)
-    expect(result.wakeLevel).toBe(78)
+    expect(result.wakeLevel).toBe(76)
   })
 
-  test('a full night is worth 48 points', () => {
-    expect(run([day({ asleepMinutes: 480 })], 30).wakeLevel).toBe(78)
+  test('a full night is worth more from a low level than a high one', () => {
+    const low = run([day({ asleepMinutes: 480 })], 30).wakeLevel! - 30
+    const high = run([day({ asleepMinutes: 480 })], 70).wakeLevel! - 70
+    expect(low).toBeGreaterThan(high)
+    expect(run([day({ asleepMinutes: 480 })], 30).wakeLevel).toBe(83)
   })
 
   test('half a night is worth half as much', () => {
-    expect(run([day({ asleepMinutes: 240 })], 30).wakeLevel).toBe(54)
+    expect(run([day({ asleepMinutes: 240 })], 30).wakeLevel).toBe(57)
   })
 
-  test('cannot charge past full', () => {
-    expect(run([day({ asleepMinutes: 600 })], 80).wakeLevel).toBe(100)
+  test('never charges past full', () => {
+    expect(run([day({ asleepMinutes: 600 })], 100).wakeLevel).toBe(100)
   })
 
   test('a missing night charges nothing', () => {
@@ -84,8 +93,8 @@ describe('naps', () => {
 
   test('charge at the night rate', () => {
     const result = run([napDay(60)], 50)
-    expect(result.napCharge).toBe(6)
-    expect(result.level).toBe(56)
+    expect(result.napCharge).toBe(5)
+    expect(result.level).toBe(55)
   })
 
   test('are capped, so one cannot stand in for a night', () => {
@@ -123,12 +132,12 @@ describe('carrying over between days', () => {
     const rest = day({ date: 'd2', asleepMinutes: 480, hours: [] })
     const result = run([hard, rest], 60)
     expect(result.bedLevel).toBeLessThan(20)
-    expect(result.wakeLevel).toBeLessThan(70)
+    expect(result.wakeLevel).toBeLessThan(90)
   })
 
   test('two quiet nights climb towards full', () => {
     const quiet = (date: string) => day({ date, asleepMinutes: 450, hours: [] })
-    expect(run([quiet('d1'), quiet('d2')], 20).wakeLevel).toBe(100)
+    expect(run([quiet('d1'), quiet('d2')], 20).wakeLevel).toBe(93)
   })
 })
 

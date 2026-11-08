@@ -98,7 +98,9 @@ interface DayResult {
 /** One day: charge for the night that ended this morning, then walk the waking hours. */
 function runDay(day: BatteryDay, startLevel: number): DayResult {
   const bedLevel = startLevel
-  const chargedOvernight = ((day.asleepMinutes ?? 0) / 60) * config.chargePerSleepHour
+  // Charging slows as the level rises: the rate is a share of the room left, not a flat amount.
+  const perHour = config.chargePerSleepHour * ((100 - startLevel) / 100)
+  const chargedOvernight = ((day.asleepMinutes ?? 0) / 60) * perHour
   let level = clamp(startLevel + chargedOvernight)
   const wakeLevel = level
 
@@ -106,7 +108,7 @@ function runDay(day: BatteryDay, startLevel: number): DayResult {
   let napBudget = config.napDailyMaxCharge
   for (const nap of day.naps ?? []) {
     if (nap.asleepMinutes < config.napMinMinutes) continue
-    const charge = Math.min((nap.asleepMinutes / 60) * config.chargePerSleepHour, config.napMaxCharge, napBudget)
+    const charge = Math.min((nap.asleepMinutes / 60) * perHour, config.napMaxCharge, napBudget)
     if (charge <= 0) continue
     napBudget -= charge
     napByHour.set(nap.hour, (napByHour.get(nap.hour) ?? 0) + charge)
