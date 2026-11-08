@@ -197,7 +197,7 @@ enum WorkoutExport {
            CustomWorkout.supportsAlert(alert, activity: activity, location: location) {
             step.alert = alert
         }
-        // `WorkoutStep.displayName` is watchOS 11, and a Series 5 stops at 10.6.1, so a per-step
+        // `WorkoutStep.displayName` is watchOS 11, and a Series 5 stops at 10.6.2, so a per-step
         // name could never reach this user's watch. The Workout app labels the stages itself;
         // only the workout's own name carries across. `Step.name` is kept for the app's own UI.
         return step
