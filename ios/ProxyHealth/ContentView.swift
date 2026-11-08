@@ -23,6 +23,18 @@ struct ContentView: View {
             FloatingTabBar(selection: $tab).padding(.bottom, 6)
         }
         .background(Brand.ground)
+        .task {
+            #if DEBUG
+            // Simulator testing: `-watchSend 1` asks for the scheduling permission and pushes
+            // the plan at launch, so the hand-off can be exercised without reaching a control
+            // that sits below the fold.
+            guard UserDefaults.standard.bool(forKey: "watchSend") else { return }
+            _ = await WorkoutExport.requestAuthorization()
+            await dashboard.loadPlan(settings: model.settings, month: .current, force: true)
+            await dashboard.syncWatch(force: true)
+            print("[watch] forced send -> scheduled \(dashboard.watchDates) note=\(dashboard.watchNote ?? "nil")")
+            #endif
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active, model.isAuthorized, model.settings.isConfigured else { return }
             Task {
