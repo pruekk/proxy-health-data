@@ -71,16 +71,29 @@ enum WorkoutExport {
         }
 
         let wanted = upcoming(in: plan)
-        let wantedDates = Set(wanted.map(\.date))
-        let existing = await WorkoutScheduler.shared.scheduledWorkouts
 
-        // Sweep. Anything not in the window goes, whether it was done, missed, or belongs to a
-        // plan the coach has since rewritten — in every one of those cases keeping it would
-        // leave the watch showing something the calendar no longer says.
-        for entry in existing {
+        // Build what each day *should* be before touching the watch, so the sweep can compare
+        // content and not just dates. A day whose plan the coach rewrote keeps its date, so a
+        // date-only check leaves the old session sitting on the watch: the athlete would run
+        // Monday's easy run while the app and the plan both say intervals.
+        var desired: [String: CustomWorkout] = [:]
+        for day in wanted {
+            if let workout = customWorkout(for: day, zones: zones) {
+                desired[day.date] = workout
+            } else {
+                outcome.skipped.append(day.date)
+            }
+        }
+
+        // Sweep: anything the plan no longer asks for, and anything whose session has changed.
+        for entry in await WorkoutScheduler.shared.scheduledWorkouts {
             guard let date = dayKey(from: entry.date) else { continue }
-            guard !wantedDates.contains(date) else { continue }
-            if finished(date: date, in: plan) {
+            if let want = desired[date], case .custom(let have) = entry.plan.workout, have == want {
+                continue
+            }
+            // markComplete only claims the session happened, so it is for days that are gone
+            // from the plan window, never for one being replaced.
+            if desired[date] == nil, finished(date: date, in: plan) {
                 await WorkoutScheduler.shared.markComplete(entry.plan, at: entry.date)
             }
             await WorkoutScheduler.shared.remove(entry.plan, at: entry.date)
@@ -88,18 +101,19 @@ enum WorkoutExport {
         }
 
         let stillThere = Set((await WorkoutScheduler.shared.scheduledWorkouts).compactMap { dayKey(from: $0.date) })
-        for day in wanted {
-            guard !stillThere.contains(day.date) else { continue }
-            guard let workout = customWorkout(for: day, zones: zones) else {
-                outcome.skipped.append(day.date)
-                continue
-            }
-            var when = components(for: day.date)
+        for date in desired.keys.sorted() {
+            guard !stillThere.contains(date), let workout = desired[date] else { continue }
+            var when = components(for: date)
             when.hour = startHour
             when.minute = startMinute
             await WorkoutScheduler.shared.schedule(WorkoutPlan(.custom(workout)), at: when)
-            outcome.scheduled.append(day.date)
+            outcome.scheduled.append(date)
         }
+        #if DEBUG
+        // The sweep is the part that cannot be seen from the UI, so it says what it did.
+        print("[watch] reconcile wanted=\(wanted.map(\.date)) " +
+              "scheduled=\(outcome.scheduled) removed=\(outcome.removed) skipped=\(outcome.skipped)")
+        #endif
         return outcome
     }
 
