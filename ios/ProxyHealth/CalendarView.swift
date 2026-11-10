@@ -124,11 +124,11 @@ struct CalendarView: View {
 
     // MARK: Next up
 
-    /// The first planned day from today onwards, shown in full so the screen answers "what am I
-    /// doing next" without a tap.
+    /// The first day from today onwards that is still ahead. A day already done or missed is
+    /// history, so it is passed over: today's session once done must not stay as "next".
     private var next: PlanDayDoc? {
         guard let range else { return nil }
-        return range.days.first { $0.date >= range.today && $0.plan != nil }
+        return range.days.first { $0.date >= range.today && $0.plan != nil && $0.state == .planned }
     }
 
     @ViewBuilder private var upNext: some View {

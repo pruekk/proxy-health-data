@@ -201,7 +201,7 @@ enum WorkoutExport {
         }
         guard let recipe = WorkoutRecipe.build(
             type: planned.type,
-            displayName: "\(planned.kind.short) · \(planned.kind.title)",
+            displayName: watchName(for: planned.type),
             steps: steps,
             repeats: planned.reps?.count,
             zoneCeiling: zoneCeiling(zones)
@@ -227,6 +227,20 @@ enum WorkoutExport {
             },
             cooldown: recipe.cooldown.map { step($0, activity: activity, location: location) }
         )
+    }
+
+    /// The name the watch shows. Plain English on purpose: the Thai label stays in the app, and
+    /// a plain name is one less thing to blame when a workout is missing from the Workout app.
+    static func watchName(for type: String) -> String {
+        switch type {
+        case "easy": "Easy Run"
+        case "long": "Long Run"
+        case "marathon": "Marathon Pace"
+        case "threshold": "Threshold Run"
+        case "interval": "Intervals"
+        case "repetition": "Repetitions"
+        default: "Run"
+        }
     }
 
     /// The top of zone 2 — where zone 3 begins. Taken from the user's own corroborated maximum,
